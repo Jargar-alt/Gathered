@@ -11,7 +11,8 @@
         "photoURL": { "type": "string" },
         "avatarColor": { "type": "string" },
         "initials": { "type": "string" },
-        "groupId": { "type": "string" }
+        "groupId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
       },
       "required": ["uid", "displayName", "email"]
     },

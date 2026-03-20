@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Component } from 'react';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
@@ -26,7 +26,9 @@ import {
   arrayUnion, 
   serverTimestamp,
   getDocs,
-  limit
+  limit,
+  getDocFromCache,
+  getDocFromServer
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { 
@@ -119,8 +121,108 @@ interface PrayerRequest {
   createdAt: any;
 }
 
+// --- Error Handling ---
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+    tenantId?: string | null;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+class ErrorBoundary extends (Component as any) {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      let errorMessage = "Something went wrong.";
+      try {
+        const parsed = JSON.parse(this.state.error.message);
+        if (parsed.error) errorMessage = parsed.error;
+      } catch (e) {
+        errorMessage = (this.state.error as any).message || errorMessage;
+      }
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-stone-50">
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200 max-w-md w-full text-center">
+            <h2 className="text-xl font-bold text-stone-900 mb-4">Application Error</h2>
+            <p className="text-stone-600 mb-6">{errorMessage}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // --- Components ---
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
@@ -133,21 +235,25 @@ export default function App() {
       setUser(u);
       if (u) {
         const docRef = doc(db, 'users', u.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
-        } else {
-          // Initial profile creation
-          const initials = u.displayName ? u.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : u.email?.[0].toUpperCase() || 'U';
-          const newProfile: UserProfile = {
-            uid: u.uid,
-            displayName: u.displayName || u.email?.split('@')[0] || 'User',
-            email: u.email || '',
-            avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-            initials: initials.slice(0, 2),
-          };
-          await setDoc(docRef, newProfile);
-          setProfile(newProfile);
+        try {
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setProfile(docSnap.data() as UserProfile);
+          } else {
+            // Initial profile creation
+            const initials = u.displayName ? u.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : u.email?.[0].toUpperCase() || 'U';
+            const newProfile: UserProfile = {
+              uid: u.uid,
+              displayName: u.displayName || u.email?.split('@')[0] || 'User',
+              email: u.email || '',
+              avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+              initials: initials.slice(0, 2),
+            };
+            await setDoc(docRef, newProfile);
+            setProfile(newProfile);
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
         }
       } else {
         setProfile(null);
@@ -164,13 +270,31 @@ export default function App() {
       const unsubscribe = onSnapshot(doc(db, 'groups', profile.groupId), (docSnap) => {
         if (docSnap.exists()) {
           setGroup({ id: docSnap.id, ...docSnap.data() } as Group);
+        } else {
+          setGroup(null);
         }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, `groups/${profile.groupId}`);
       });
       return unsubscribe;
     } else {
       setGroup(null);
     }
   }, [profile?.groupId]);
+
+  // Connection Test
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. ");
+        }
+      }
+    }
+    testConnection();
+  }, []);
 
   if (loading) {
     return (
@@ -221,9 +345,23 @@ export default function App() {
 
       <main className="max-w-2xl mx-auto p-4 pb-24">
         <AnimatePresence mode="wait">
-          {view === 'calendar' && <CalendarView group={group!} profile={profile} />}
-          {view === 'prayers' && <PrayerView group={group!} profile={profile} />}
-          {view === 'settings' && <SettingsView profile={profile} group={group!} />}
+          {group ? (
+            <motion.div 
+              key={view}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {view === 'calendar' && <CalendarView group={group} profile={profile!} />}
+              {view === 'prayers' && <PrayerView group={group} profile={profile!} />}
+              {view === 'settings' && <SettingsView profile={profile!} group={group} />}
+            </motion.div>
+          ) : (
+            <div className="min-h-[50vh] flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
+            </div>
+          )}
         </AnimatePresence>
       </main>
     </div>
@@ -354,7 +492,7 @@ function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
         groupId: groupDoc.id
       });
     } catch (err: any) {
-      setError(err.message);
+      handleFirestoreError(err, OperationType.UPDATE, `groups/${inviteCode}`);
     }
   };
 
@@ -372,7 +510,7 @@ function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
         groupId: groupRef.id
       });
     } catch (err: any) {
-      setError(err.message);
+      handleFirestoreError(err, OperationType.WRITE, 'groups/users');
     }
   };
 
@@ -474,6 +612,8 @@ function CalendarView({ group, profile }: { group: Group, profile: UserProfile }
     const q = query(collection(db, 'readings'), where('groupId', '==', group.id));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReadingEntry)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'readings');
     });
     return unsubscribe;
   }, [group.id]);
@@ -588,7 +728,7 @@ function CalendarView({ group, profile }: { group: Group, profile: UserProfile }
                   <p className="text-stone-400 text-sm italic py-4">No entries for this day.</p>
                 ) : (
                   getEntriesForDay(selectedDay).map(entry => (
-                    <ReadingCard entry={entry} member={members[entry.uid]} profile={profile} />
+                    <ReadingCard key={entry.id} entry={entry} member={members[entry.uid]} profile={profile} />
                   ))
                 )}
               </div>
@@ -620,7 +760,7 @@ function ReadingForm({ date, group, profile, onClose }: { date: Date, group: Gro
       });
       onClose();
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, 'readings');
     } finally {
       setSubmitting(false);
     }
@@ -669,7 +809,7 @@ function ReadingForm({ date, group, profile, onClose }: { date: Date, group: Gro
   );
 }
 
-function ReadingCard({ entry, member, profile }: { entry: ReadingEntry, member: UserProfile, profile: UserProfile }) {
+function ReadingCard({ entry, member, profile }: { entry: ReadingEntry, member: UserProfile, profile: UserProfile, key?: string }) {
   const handleReaction = async (emoji: string) => {
     const reactions = { ...entry.reactions };
     if (!reactions[emoji]) reactions[emoji] = [];
@@ -680,7 +820,7 @@ function ReadingCard({ entry, member, profile }: { entry: ReadingEntry, member: 
       reactions[emoji].push(profile.uid);
     }
     
-    await updateDoc(doc(db, 'readings', entry.id), { reactions });
+    await updateDoc(doc(db, 'readings', entry.id), { reactions }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `readings/${entry.id}`));
   };
 
   return (
@@ -732,6 +872,8 @@ function PrayerView({ group, profile }: { group: Group, profile: UserProfile }) 
         .map(doc => ({ id: doc.id, ...doc.data() } as PrayerRequest))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setPrayers(sorted);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'prayers');
     });
     return unsubscribe;
   }, [group.id]);
@@ -787,7 +929,7 @@ function PrayerView({ group, profile }: { group: Group, profile: UserProfile }) 
           </div>
         ) : (
           prayers.map(prayer => (
-            <PrayerCard prayer={prayer} member={members[prayer.uid]} profile={profile} />
+            <PrayerCard key={prayer.id} prayer={prayer} member={members[prayer.uid]} profile={profile} />
           ))
         )}
       </div>
@@ -815,7 +957,7 @@ function PrayerForm({ group, profile, onClose }: { group: Group, profile: UserPr
       });
       onClose();
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, 'prayers');
     } finally {
       setSubmitting(false);
     }
@@ -867,7 +1009,7 @@ function PrayerForm({ group, profile, onClose }: { group: Group, profile: UserPr
   );
 }
 
-function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member: UserProfile, profile: UserProfile }) {
+function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member: UserProfile, profile: UserProfile, key?: string }) {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
 
@@ -881,7 +1023,7 @@ function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member
       reactions[emoji].push(profile.uid);
     }
     
-    await updateDoc(doc(db, 'prayers', prayer.id), { reactions });
+    await updateDoc(doc(db, 'prayers', prayer.id), { reactions }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `prayers/${prayer.id}`));
   };
 
   const handleAddNote = async (e: React.FormEvent) => {
@@ -894,7 +1036,7 @@ function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member
         text: noteText,
         createdAt: new Date().toISOString()
       })
-    });
+    }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `prayers/${prayer.id}`));
     setNoteText('');
     setShowNoteForm(false);
   };
@@ -996,7 +1138,7 @@ function SettingsView({ profile, group }: { profile: UserProfile, group: Group }
         initials: initials.slice(0, 2).toUpperCase()
       });
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
     } finally {
       setSaving(false);
     }
