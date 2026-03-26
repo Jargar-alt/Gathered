@@ -39,14 +39,16 @@ service cloud.firestore {
              data.uid is string && data.uid.size() > 0 &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 50 &&
              data.email is string && isValidEmail(data.email) &&
+             data.avatarColor is string && data.initials is string &&
              (!('groupId' in data) || data.groupId is string) &&
+             (!('photoURL' in data) || data.photoURL is string) &&
              (!('role' in data) || data.role in ['user', 'admin']);
     }
 
     function isValidGroup(data) {
       return hasOnlyAllowedFields(['name', 'inviteCode', 'memberUids', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.inviteCode is string && data.inviteCode.size() == 6 &&
+             data.inviteCode is string && data.inviteCode.size() >= 4 && data.inviteCode.size() <= 10 &&
              data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 5;
     }
 

@@ -499,7 +499,11 @@ function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
   const handleCreate = async () => {
     setError('');
     try {
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 for clarity
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
       const groupRef = await addDoc(collection(db, 'groups'), {
         name: groupName,
         inviteCode: code,
