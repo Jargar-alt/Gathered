@@ -933,7 +933,7 @@ function PrayerView({ group, profile }: { group: Group, profile: UserProfile }) 
           </div>
         ) : (
           prayers.map(prayer => (
-            <PrayerCard key={prayer.id} prayer={prayer} member={members[prayer.uid]} profile={profile} />
+            <PrayerCard key={prayer.id} prayer={prayer} member={members[prayer.uid]} members={members} profile={profile} />
           ))
         )}
       </div>
@@ -1013,7 +1013,7 @@ function PrayerForm({ group, profile, onClose }: { group: Group, profile: UserPr
   );
 }
 
-function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member: UserProfile, profile: UserProfile, key?: string }) {
+function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerRequest, member: UserProfile, members: Record<string, UserProfile>, profile: UserProfile, key?: string }) {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
 
@@ -1112,13 +1112,23 @@ function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member
 
       {prayer.notes.length > 0 && (
         <div className="space-y-3 pt-4 border-t border-stone-50">
-          {prayer.notes.map((note, idx) => (
-            <div key={idx} className="flex gap-2">
-              <div className="flex-1 bg-stone-50 p-3 rounded-xl">
-                <p className="text-xs text-stone-600 leading-relaxed">{note.text}</p>
+          {prayer.notes.map((note) => {
+            const noteAuthor = members[note.uid];
+            return (
+              <div key={`${note.uid}-${note.createdAt}`} className="flex gap-2">
+                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-stone-600 shrink-0", noteAuthor?.avatarColor)}>
+                  {noteAuthor?.initials}
+                </div>
+                <div className="flex-1 bg-stone-50 p-3 rounded-xl">
+                  <p className="text-xs font-bold text-stone-900">{noteAuthor?.displayName ?? 'Unknown'}</p>
+                  <p className="text-[10px] text-stone-400">
+                    {note.createdAt ? format(new Date(note.createdAt), 'MMM d, h:mm a') : ''}
+                  </p>
+                  <p className="text-xs text-stone-600 leading-relaxed mt-1">{note.text}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
