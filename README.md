@@ -18,3 +18,15 @@ View your app in AI Studio: https://ai.studio/apps/8208d2b0-a74a-48ef-b802-330bc
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Mobile App (Expo)
+
+An iOS app lives in [`mobile/`](mobile/). See [mobile/README.md](mobile/README.md) for setup.
+
+```bash
+cd mobile
+npm install
+npx expo start   # scan QR with Expo Go on your iPhone
+```
+
+Push notifications require deploying Cloud Functions (see mobile README).
