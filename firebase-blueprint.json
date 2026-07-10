@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "avatarColor": { "type": "string" },
+        "initials": { "type": "string" },
+        "groupId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "A small group of 2-5 people.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "memberUids": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "inviteCode", "memberUids"]
+    },
+    "ReadingEntry": {
+      "title": "Reading Entry",
+      "description": "A daily Bible reading log.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "groupId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "scripture": { "type": "string" },
+        "thoughts": { "type": "string" },
+        "reactions": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "groupId", "date", "scripture"]
+    },
+    "PrayerRequest": {
+      "title": "Prayer Request",
+      "description": "A prayer request or praise report.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "groupId": { "type": "string" },
+        "type": { "type": "string", "enum": ["request", "praise"] },
+        "content": { "type": "string" },
+        "reactions": { "type": "object" },
+        "notes": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "groupId", "type", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Group information."
+    },
+    "/readings/{readingId}": {
+      "schema": "ReadingEntry",
+      "description": "Bible reading entries."
+    },
+    "/prayers/{prayerId}": {
+      "schema": "PrayerRequest",
+      "description": "Prayer requests and praise reports."
+    }
+  }
+}
