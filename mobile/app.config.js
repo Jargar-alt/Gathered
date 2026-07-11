@@ -1,4 +1,17 @@
 /** @type {import('expo/config').ExpoConfig} */
+const IS_DEV_CLIENT =
+  process.env.EAS_BUILD_PROFILE === 'development' ||
+  process.env.EAS_BUILD_PROFILE === 'development-simulator';
+
+const authConfig = require('./auth.config');
+
+const googleSignInPlugin = authConfig.googleIosUrlScheme
+  ? [
+      '@react-native-google-signin/google-signin',
+      { iosUrlScheme: authConfig.googleIosUrlScheme },
+    ]
+  : '@react-native-google-signin/google-signin';
+
 module.exports = {
   name: 'Gathered',
   slug: 'gathered',
@@ -11,6 +24,7 @@ module.exports = {
     supportsTablet: true,
     bundleIdentifier: 'com.acuratls.gathered',
     buildNumber: '1',
+    usesAppleSignIn: true,
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
       ITSAppUsesNonExemptEncryption: false,
@@ -33,7 +47,9 @@ module.exports = {
   },
   plugins: [
     'expo-router',
-    'expo-dev-client',
+    ...(IS_DEV_CLIENT ? ['expo-dev-client'] : []),
+    'expo-apple-authentication',
+    googleSignInPlugin,
     [
       'expo-splash-screen',
       {
@@ -57,5 +73,6 @@ module.exports = {
     eas: {
       projectId: '6080dfab-8433-4115-9d43-57f1e9b2b685',
     },
+    googleWebClientId: authConfig.googleWebClientId,
   },
 };

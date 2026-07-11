@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { registerForPushNotifications } from '@/lib/notifications';
 import { UserProfile, Group } from '@shared/types';
@@ -34,7 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            const existing = docSnap.data() as UserProfile;
+            if (u.displayName && existing.displayName !== u.displayName) {
+              await updateDoc(docRef, { displayName: u.displayName });
+              setProfile({ ...existing, displayName: u.displayName });
+            } else {
+              setProfile(existing);
+            }
           } else {
             const initials = u.displayName
               ? u.displayName.split(' ').map((n) => n[0]).join('').toUpperCase()

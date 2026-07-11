@@ -7,6 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "422740563122-rq72cm5pbagtrrsci8k8jn9ipoen7m3u.apps.googleusercontent.com"
+      },
       "ios": {
         "simulator": false
       }
@@ -14,18 +17,27 @@
     "development-simulator": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "422740563122-rq72cm5pbagtrrsci8k8jn9ipoen7m3u.apps.googleusercontent.com"
+      },
       "ios": {
         "simulator": true
       }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "422740563122-rq72cm5pbagtrrsci8k8jn9ipoen7m3u.apps.googleusercontent.com"
+      },
       "ios": {
         "simulator": false
       }
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "422740563122-rq72cm5pbagtrrsci8k8jn9ipoen7m3u.apps.googleusercontent.com"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }

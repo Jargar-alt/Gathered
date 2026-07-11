@@ -41,3 +41,15 @@ eas submit --platform ios --profile production
 ```
 
 Push notifications require deploying Cloud Functions (see mobile README) and uploading an APNs key via `eas credentials`.
+
+## Privacy Policy
+
+The privacy policy lives in [`docs/privacy.html`](docs/privacy.html).
+
+To host for App Store Connect, enable **GitHub Pages** on this repo:
+1. GitHub → **Settings** → **Pages** → Source: `main` branch, `/docs` folder
+2. Use URL: `https://jargar-alt.github.io/Gathered/privacy.html`
+
+## Mobile authentication
+
+See [`docs/AUTH_SETUP.md`](docs/AUTH_SETUP.md) for Google, Apple, and email/password setup.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,23 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { Ionicons } from '@expo/vector-icons';
+import { auth, db } from '@/lib/firebase';
+import {
+  checkAppleSignInAvailable,
+  getAuthErrorMessage,
+  isGoogleSignInAvailable,
+  signInWithApple,
+  signInWithGoogle,
+} from '@/lib/socialAuth';
 
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
@@ -21,22 +32,69 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  const googleAvailable = isGoogleSignInAvailable();
+
+  useEffect(() => {
+    checkAppleSignInAvailable().then(setAppleAvailable);
+  }, []);
 
   const handleEmailAuth = async () => {
     setError('');
     setLoading(true);
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email.trim(), password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, email.trim(), password);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
+
+  const handleGoogle = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApple = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const { displayName } = await signInWithApple();
+      const user = auth.currentUser;
+      if (user && displayName) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          displayName,
+          initials: displayName
+            .split(' ')
+            .map((n) => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2),
+        });
+      }
+    } catch (err: unknown) {
+      const message = getAuthErrorMessage(err);
+      if (!message.toLowerCase().includes('cancel')) {
+        setError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showSocial = googleAvailable || appleAvailable;
 
   return (
     <KeyboardAvoidingView
@@ -47,8 +105,45 @@ export default function LoginScreen() {
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.title}>Gathered</Text>
-            <Text style={styles.subtitle}>Matthew 18:20</Text>
+            <Text style={styles.subtitle}>Where your group reads, prays, and shows up together.</Text>
           </View>
+
+          {showSocial && (
+            <View style={styles.socialSection}>
+              {appleAvailable && (
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={12}
+                  style={styles.appleBtn}
+                  onPress={handleApple}
+                />
+              )}
+
+              {googleAvailable && (
+                <Pressable
+                  onPress={handleGoogle}
+                  disabled={loading}
+                  style={[styles.googleBtn, loading && styles.disabled]}
+                >
+                  <Ionicons name="logo-google" size={18} color="#1c1917" />
+                  <Text style={styles.googleBtnText}>Continue with Google</Text>
+                </Pressable>
+              )}
+
+              {!googleAvailable && Platform.OS === 'ios' && (
+                <Text style={styles.configHint}>
+                  Google Sign-In: set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in your EAS environment.
+                </Text>
+              )}
+
+              <View style={styles.dividerRow}>
+                <View style={styles.divider} />
+                <Text style={styles.dividerText}>or use email</Text>
+                <View style={styles.divider} />
+              </View>
+            </View>
+          )}
 
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
@@ -59,6 +154,8 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              textContentType="emailAddress"
+              editable={!loading}
             />
 
             <Text style={styles.label}>Password</Text>
@@ -67,23 +164,36 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              autoComplete="password"
+              autoComplete={isLogin ? 'password' : 'new-password'}
+              textContentType={isLogin ? 'password' : 'newPassword'}
+              editable={!loading}
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Pressable
               onPress={handleEmailAuth}
-              disabled={loading}
-              style={[styles.primaryBtn, loading && styles.disabled]}
+              disabled={loading || !email.trim() || !password}
+              style={[styles.primaryBtn, (loading || !email.trim() || !password) && styles.disabled]}
             >
-              <Text style={styles.primaryBtnText}>
-                {isLogin ? 'Sign In' : 'Create Account'}
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>
+                  {isLogin ? 'Sign in with Email' : 'Create Account'}
+                </Text>
+              )}
             </Pressable>
           </View>
 
-          <Pressable onPress={() => setIsLogin(!isLogin)} style={styles.switchBtn}>
+          <Pressable
+            onPress={() => {
+              setIsLogin(!isLogin);
+              setError('');
+            }}
+            style={styles.switchBtn}
+            disabled={loading}
+          >
             <Text style={styles.switchText}>
               {isLogin ? "Don't have an account? " : 'Already have an account? '}
               <Text style={styles.switchLink}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
@@ -104,12 +214,12 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    padding: 32,
-    borderRadius: 16,
+    padding: 28,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#e7e5e4',
   },
-  header: { alignItems: 'center', marginBottom: 32 },
+  header: { alignItems: 'center', marginBottom: 24 },
   title: {
     fontSize: 32,
     fontWeight: '700',
@@ -117,11 +227,41 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#78716c',
-    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  socialSection: { gap: 12, marginBottom: 8 },
+  appleBtn: { width: '100%', height: 48 },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+    backgroundColor: '#fff',
+  },
+  googleBtnText: { fontSize: 15, fontWeight: '600', color: '#1c1917' },
+  configHint: {
+    fontSize: 11,
+    color: '#a8a29e',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 4,
   },
+  divider: { flex: 1, height: 1, backgroundColor: '#f5f5f4' },
+  dividerText: { fontSize: 12, color: '#a8a29e', fontWeight: '500' },
   form: { gap: 12 },
   label: {
     fontSize: 11,
@@ -139,14 +279,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontSize: 15,
     marginBottom: 4,
+    color: '#1c1917',
   },
-  error: { color: '#ef4444', fontSize: 12 },
+  error: { color: '#ef4444', fontSize: 13, lineHeight: 18 },
   primaryBtn: {
     paddingVertical: 14,
     backgroundColor: '#1c1917',
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   disabled: { opacity: 0.5 },

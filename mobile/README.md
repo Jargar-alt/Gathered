@@ -105,6 +105,6 @@ Push tokens are saved to `users/{uid}.expoPushToken` in Firestore.
 
 ## Auth
 
-Email/password sign-in works out of the box. Use the same account as the web app.
+Email/password, **Sign in with Apple**, and **Google** are supported. Use the same account as the web app — your group data syncs automatically.
 
-Google Sign-In is not yet implemented on mobile (web only for now).
+See [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md) for Firebase and OAuth configuration.
