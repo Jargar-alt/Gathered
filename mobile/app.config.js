@@ -48,6 +48,17 @@ module.exports = {
   plugins: [
     'expo-router',
     ...(IS_DEV_CLIENT ? ['expo-dev-client'] : []),
+    [
+      'expo-build-properties',
+      {
+        ios: {
+          extraPods: [
+            { name: 'GoogleUtilities', modular_headers: true },
+            { name: 'RecaptchaInterop', modular_headers: true },
+          ],
+        },
+      },
+    ],
     'expo-apple-authentication',
     googleSignInPlugin,
     [
