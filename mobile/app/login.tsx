@@ -133,7 +133,7 @@ export default function LoginScreen() {
 
               {!googleAvailable && Platform.OS === 'ios' && (
                 <Text style={styles.configHint}>
-                  Google Sign-In: set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in your EAS environment.
+                  Google Sign-In needs a rebuild with Google client IDs configured.
                 </Text>
               )}
 

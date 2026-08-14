@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import {
@@ -10,21 +11,45 @@ import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/goo
 import { auth } from '@/lib/firebase';
 import authConfig from '../auth.config';
 
+type GoogleExtra = {
+  googleWebClientId?: string;
+  googleIosClientId?: string;
+};
+
+function getGoogleConfig(): { webClientId: string; iosClientId?: string } {
+  const extra = (Constants.expoConfig?.extra ?? {}) as GoogleExtra;
+  const webClientId =
+    extra.googleWebClientId ||
+    authConfig.googleWebClientId ||
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+    '';
+  const iosClientId =
+    extra.googleIosClientId ||
+    authConfig.googleIosClientId ||
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
+    '';
+  return {
+    webClientId,
+    iosClientId: iosClientId || undefined,
+  };
+}
+
 let googleConfigured = false;
 
 function configureGoogleSignIn() {
   if (googleConfigured) return;
-  if (!authConfig.googleWebClientId) return;
+  const { webClientId, iosClientId } = getGoogleConfig();
+  if (!webClientId) return;
 
   GoogleSignin.configure({
-    webClientId: authConfig.googleWebClientId,
-    iosClientId: authConfig.googleIosClientId || undefined,
+    webClientId,
+    iosClientId,
   });
   googleConfigured = true;
 }
 
 export function isGoogleSignInAvailable(): boolean {
-  return Boolean(authConfig.googleWebClientId);
+  return Boolean(getGoogleConfig().webClientId);
 }
 
 export function isAppleSignInAvailable(): boolean {
@@ -37,9 +62,10 @@ export async function checkAppleSignInAvailable(): Promise<boolean> {
 }
 
 export async function signInWithGoogle(): Promise<void> {
-  if (!authConfig.googleWebClientId) {
+  const { webClientId } = getGoogleConfig();
+  if (!webClientId) {
     throw new Error(
-      'Google Sign-In is not configured. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to your environment.'
+      'Google Sign-In is not configured. Rebuild with Google client IDs in auth.config.js / EAS env.'
     );
   }
 
@@ -115,6 +141,9 @@ export function getAuthErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message.includes('auth/invalid-credential')) {
       return 'Sign-in failed. Check that Google and Apple are enabled in Firebase Authentication.';
+    }
+    if (error.message.includes('auth/account-exists-with-different-credential')) {
+      return 'An account already exists with this email using a different sign-in method.';
     }
     if (error.message.includes('auth/email-already-in-use')) {
       return 'An account with this email already exists. Try signing in with your original method.';

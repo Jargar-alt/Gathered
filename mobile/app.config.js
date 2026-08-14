@@ -5,12 +5,11 @@ const IS_DEV_CLIENT =
 
 const authConfig = require('./auth.config');
 
-const googleSignInPlugin = authConfig.googleIosUrlScheme
-  ? [
-      '@react-native-google-signin/google-signin',
-      { iosUrlScheme: authConfig.googleIosUrlScheme },
-    ]
-  : '@react-native-google-signin/google-signin';
+// iosUrlScheme must be present at prebuild or Google Sign-In cannot return to the app.
+const googleSignInPlugin = [
+  '@react-native-google-signin/google-signin',
+  { iosUrlScheme: authConfig.googleIosUrlScheme },
+];
 
 module.exports = {
   name: 'Gathered',
@@ -85,5 +84,7 @@ module.exports = {
       projectId: '6080dfab-8433-4115-9d43-57f1e9b2b685',
     },
     googleWebClientId: authConfig.googleWebClientId,
+    googleIosClientId: authConfig.googleIosClientId,
+    googleIosUrlScheme: authConfig.googleIosUrlScheme,
   },
 };
