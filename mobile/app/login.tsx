@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,11 +28,14 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const googleAvailable = isGoogleSignInAvailable();
 
   const handleEmailAuth = async () => {
     setError('');
+    setInfo('');
     setLoading(true);
     try {
       if (isLogin) {
@@ -46,8 +50,29 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Enter your email above, then tap Forgot password.');
+      setInfo('');
+      return;
+    }
+    setError('');
+    setInfo('');
+    setResetting(true);
+    try {
+      await sendPasswordResetEmail(auth, trimmed);
+      setInfo('Password reset email sent. Check your inbox (and spam).');
+    } catch (err: unknown) {
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleGoogle = async () => {
     setError('');
+    setInfo('');
     setLoading(true);
     try {
       await signInWithGoogle();
@@ -74,8 +99,8 @@ export default function LoginScreen() {
             <View style={styles.socialSection}>
               <Pressable
                 onPress={handleGoogle}
-                disabled={loading}
-                style={[styles.googleBtn, loading && styles.disabled]}
+                disabled={loading || resetting}
+                style={[styles.googleBtn, (loading || resetting) && styles.disabled]}
               >
                 <Ionicons name="logo-google" size={18} color="#1c1917" />
                 <Text style={styles.googleBtnText}>Continue with Google</Text>
@@ -99,7 +124,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoComplete="email"
               textContentType="emailAddress"
-              editable={!loading}
+              editable={!loading && !resetting}
             />
 
             <Text style={styles.label}>Password</Text>
@@ -110,15 +135,34 @@ export default function LoginScreen() {
               secureTextEntry
               autoComplete={isLogin ? 'password' : 'new-password'}
               textContentType={isLogin ? 'password' : 'newPassword'}
-              editable={!loading}
+              editable={!loading && !resetting}
             />
 
+            {isLogin ? (
+              <Pressable
+                onPress={handleForgotPassword}
+                disabled={loading || resetting}
+                style={styles.forgotBtn}
+                hitSlop={8}
+              >
+                {resetting ? (
+                  <ActivityIndicator size="small" color="#78716c" />
+                ) : (
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                )}
+              </Pressable>
+            ) : null}
+
             {error ? <Text style={styles.error}>{error}</Text> : null}
+            {info ? <Text style={styles.info}>{info}</Text> : null}
 
             <Pressable
               onPress={handleEmailAuth}
-              disabled={loading || !email.trim() || !password}
-              style={[styles.primaryBtn, (loading || !email.trim() || !password) && styles.disabled]}
+              disabled={loading || resetting || !email.trim() || !password}
+              style={[
+                styles.primaryBtn,
+                (loading || resetting || !email.trim() || !password) && styles.disabled,
+              ]}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -134,9 +178,10 @@ export default function LoginScreen() {
             onPress={() => {
               setIsLogin(!isLogin);
               setError('');
+              setInfo('');
             }}
             style={styles.switchBtn}
-            disabled={loading}
+            disabled={loading || resetting}
           >
             <Text style={styles.switchText}>
               {isLogin ? "Don't have an account? " : 'Already have an account? '}
@@ -217,7 +262,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     color: '#1c1917',
   },
+  forgotBtn: { alignSelf: 'flex-end', marginTop: -4, marginBottom: 4, minHeight: 20 },
+  forgotText: { fontSize: 13, fontWeight: '500', color: '#78716c' },
   error: { color: '#ef4444', fontSize: 13, lineHeight: 18 },
+  info: { color: '#15803d', fontSize: 13, lineHeight: 18 },
   primaryBtn: {
     paddingVertical: 14,
     backgroundColor: '#1c1917',

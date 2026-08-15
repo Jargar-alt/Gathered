@@ -103,6 +103,9 @@ export function getAuthErrorMessage(error: unknown): string {
     if (error.message.includes('auth/user-not-found')) {
       return 'No account found with this email.';
     }
+    if (error.message.includes('auth/too-many-requests')) {
+      return 'Too many attempts. Wait a bit and try again.';
+    }
     if (error.message.includes('auth/weak-password')) {
       return 'Password should be at least 6 characters.';
     }

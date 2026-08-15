@@ -22,7 +22,6 @@ module.exports = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.acuratls.gathered',
-    buildNumber: '1',
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
       ITSAppUsesNonExemptEncryption: false,
