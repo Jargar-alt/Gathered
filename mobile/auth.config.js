@@ -1,14 +1,16 @@
 /**
  * Google OAuth client IDs (public — safe to ship in the app).
  * Env vars override these when set (EAS eas.json env / .env.local).
+ *
+ * Prefix 1074128724577 = Gathered Firebase / Google Cloud project.
  */
 const DEFAULTS = {
   googleWebClientId:
-    '422740563122-rq72cm5pbagtrrsci8k8jn9ipoen7m3u.apps.googleusercontent.com',
+    '1074128724577-er7cssinjgafqgrl8am8k82laga9n39p.apps.googleusercontent.com',
   googleIosClientId:
-    '422740563122-4ft8miaq8k280qcb52spp0rbetftmrhk.apps.googleusercontent.com',
+    '1074128724577-6qctc3k3uskb48j7vpjs6no1ssi3nca2.apps.googleusercontent.com',
   googleIosUrlScheme:
-    'com.googleusercontent.apps.422740563122-4ft8miaq8k280qcb52spp0rbetftmrhk',
+    'com.googleusercontent.apps.1074128724577-6qctc3k3uskb48j7vpjs6no1ssi3nca2',
 };
 
 module.exports = {
