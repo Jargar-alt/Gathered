@@ -7,81 +7,41 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import {
-  collection,
-  query,
-  where,
-  limit,
-  getDocs,
-  addDoc,
-  updateDoc,
-  doc,
-  arrayUnion,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Mode = 'choice' | 'join' | 'create';
 
 export default function OnboardingScreen() {
-  const { profile } = useAuth();
+  const { profile, joinGroup, createGroup } = useAuth();
   const [mode, setMode] = useState<Mode>('choice');
   const [inviteCode, setInviteCode] = useState('');
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const handleJoin = async () => {
-    if (!profile) return;
+    if (!profile || !inviteCode.trim()) return;
     setError('');
+    setBusy(true);
     try {
-      const q = query(
-        collection(db, 'groups'),
-        where('inviteCode', '==', inviteCode.toUpperCase()),
-        limit(1)
-      );
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
-        setError('Invalid invite code');
-        return;
-      }
-      const groupDoc = querySnapshot.docs[0];
-      const groupData = groupDoc.data();
-      if (groupData.memberUids.length >= 5) {
-        setError('Group is full');
-        return;
-      }
-      await updateDoc(doc(db, 'groups', groupDoc.id), {
-        memberUids: arrayUnion(profile.uid),
-      });
-      await updateDoc(doc(db, 'users', profile.uid), {
-        groupId: groupDoc.id,
-      });
+      await joinGroup(inviteCode);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join group');
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleCreate = async () => {
     if (!profile || !groupName.trim()) return;
     setError('');
+    setBusy(true);
     try {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let code = '';
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      const groupRef = await addDoc(collection(db, 'groups'), {
-        name: groupName,
-        inviteCode: code,
-        memberUids: [profile.uid],
-        createdAt: serverTimestamp(),
-      });
-      await updateDoc(doc(db, 'users', profile.uid), {
-        groupId: groupRef.id,
-      });
+      await createGroup(groupName);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create group');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -119,10 +79,15 @@ export default function OnboardingScreen() {
               value={inviteCode}
               onChangeText={setInviteCode}
               autoCapitalize="characters"
+              editable={!busy}
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable onPress={handleJoin} style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>Join Group</Text>
+            <Pressable
+              onPress={handleJoin}
+              style={[styles.primaryBtn, busy && styles.disabled]}
+              disabled={busy}
+            >
+              <Text style={styles.primaryBtnText}>{busy ? 'Joining…' : 'Join Group'}</Text>
             </Pressable>
           </View>
         )}
@@ -138,10 +103,15 @@ export default function OnboardingScreen() {
               placeholder="Group Name"
               value={groupName}
               onChangeText={setGroupName}
+              editable={!busy}
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable onPress={handleCreate} style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>Create Group</Text>
+            <Pressable
+              onPress={handleCreate}
+              style={[styles.primaryBtn, busy && styles.disabled]}
+              disabled={busy}
+            >
+              <Text style={styles.primaryBtnText}>{busy ? 'Creating…' : 'Create Group'}</Text>
             </Pressable>
           </View>
         )}
@@ -211,4 +181,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  disabled: { opacity: 0.5 },
 });

@@ -23,7 +23,9 @@ import {
   onSnapshot, 
   addDoc, 
   updateDoc, 
-  arrayUnion, 
+  arrayUnion,
+  arrayRemove,
+  deleteField,
   serverTimestamp,
   getDocs,
   limit,
@@ -90,6 +92,33 @@ interface UserProfile {
   avatarColor: string;
   initials: string;
   groupId?: string;
+  groupIds?: string[];
+}
+
+function normalizeMembership(profile: UserProfile): UserProfile {
+  const ids = profile.groupIds?.length
+    ? profile.groupIds
+    : profile.groupId
+      ? [profile.groupId]
+      : [];
+  const active =
+    profile.groupId && ids.includes(profile.groupId)
+      ? profile.groupId
+      : ids[0];
+  return {
+    ...profile,
+    groupIds: ids,
+    groupId: active,
+  };
+}
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
 interface Group {
@@ -226,6 +255,7 @@ function AppContent() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'calendar' | 'prayers' | 'settings'>('calendar');
 
@@ -238,9 +268,17 @@ function AppContent() {
         try {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            let existing = normalizeMembership(docSnap.data() as UserProfile);
+            const needsMigrate =
+              !docSnap.data().groupIds?.length && Boolean(docSnap.data().groupId);
+            if (needsMigrate) {
+              await updateDoc(docRef, {
+                groupIds: existing.groupIds,
+                groupId: existing.groupId,
+              });
+            }
+            setProfile(existing);
           } else {
-            // Initial profile creation
             const initials = u.displayName ? u.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : u.email?.[0].toUpperCase() || 'U';
             const newProfile: UserProfile = {
               uid: u.uid,
@@ -248,6 +286,7 @@ function AppContent() {
               email: u.email || '',
               avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
               initials: initials.slice(0, 2),
+              groupIds: [],
             };
             await setDoc(docRef, newProfile);
             setProfile(newProfile);
@@ -258,13 +297,25 @@ function AppContent() {
       } else {
         setProfile(null);
         setGroup(null);
+        setGroups([]);
       }
       setLoading(false);
     });
     return unsubscribe;
   }, []);
 
-  // Group Listener
+  // Live profile updates
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+      if (snap.exists()) {
+        setProfile(normalizeMembership(snap.data() as UserProfile));
+      }
+    });
+    return unsubscribe;
+  }, [user?.uid]);
+
+  // Active group listener
   useEffect(() => {
     if (profile?.groupId) {
       const unsubscribe = onSnapshot(doc(db, 'groups', profile.groupId), (docSnap) => {
@@ -282,6 +333,29 @@ function AppContent() {
     }
   }, [profile?.groupId]);
 
+  // All memberships
+  useEffect(() => {
+    const ids = profile?.groupIds ?? [];
+    if (ids.length === 0) {
+      setGroups([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const loaded: Group[] = [];
+      for (const id of ids) {
+        const snap = await getDoc(doc(db, 'groups', id));
+        if (snap.exists()) {
+          loaded.push({ id: snap.id, ...snap.data() } as Group);
+        }
+      }
+      if (!cancelled) setGroups(loaded);
+    })().catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.groupIds?.join(',')]);
+
   // Connection Test
   useEffect(() => {
     async function testConnection() {
@@ -296,6 +370,79 @@ function AppContent() {
     testConnection();
   }, []);
 
+  const switchGroup = useCallback(async (groupId: string) => {
+    if (!profile) return;
+    if (!(profile.groupIds ?? []).includes(groupId)) {
+      throw new Error('You are not a member of that group.');
+    }
+    await updateDoc(doc(db, 'users', profile.uid), { groupId });
+  }, [profile]);
+
+  const joinGroup = useCallback(async (inviteCode: string) => {
+    if (!profile) return;
+    const q = query(
+      collection(db, 'groups'),
+      where('inviteCode', '==', inviteCode.trim().toUpperCase()),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      throw new Error('Invalid invite code');
+    }
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+    if (groupData.memberUids.includes(profile.uid)) {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        groupId: groupDoc.id,
+        groupIds: arrayUnion(groupDoc.id),
+      });
+      return;
+    }
+    if (groupData.memberUids.length >= 5) {
+      throw new Error('Group is full');
+    }
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      memberUids: arrayUnion(profile.uid),
+    });
+    await updateDoc(doc(db, 'users', profile.uid), {
+      groupId: groupDoc.id,
+      groupIds: arrayUnion(groupDoc.id),
+    });
+  }, [profile]);
+
+  const createGroup = useCallback(async (name: string) => {
+    if (!profile || !name.trim()) return;
+    const groupRef = await addDoc(collection(db, 'groups'), {
+      name: name.trim(),
+      inviteCode: generateInviteCode(),
+      memberUids: [profile.uid],
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'users', profile.uid), {
+      groupId: groupRef.id,
+      groupIds: arrayUnion(groupRef.id),
+    });
+  }, [profile]);
+
+  const leaveGroup = useCallback(async (groupId: string) => {
+    if (!profile) return;
+    const remaining = (profile.groupIds ?? []).filter((id) => id !== groupId);
+    const nextActive =
+      profile.groupId === groupId ? remaining[0] ?? null : profile.groupId ?? null;
+
+    await updateDoc(doc(db, 'groups', groupId), {
+      memberUids: arrayRemove(profile.uid),
+    });
+
+    const userUpdate: Record<string, unknown> = { groupIds: remaining };
+    if (nextActive) {
+      userUpdate.groupId = nextActive;
+    } else {
+      userUpdate.groupId = deleteField();
+    }
+    await updateDoc(doc(db, 'users', profile.uid), userUpdate);
+  }, [profile]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-50">
@@ -308,16 +455,24 @@ function AppContent() {
     return <AuthScreen />;
   }
 
-  if (!profile?.groupId) {
-    return <OnboardingScreen profile={profile} />;
+  const hasGroups = Boolean(profile?.groupIds?.length || profile?.groupId);
+
+  if (!hasGroups) {
+    return (
+      <OnboardingScreen
+        profile={profile}
+        onJoin={joinGroup}
+        onCreate={createGroup}
+      />
+    );
   }
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-stone-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-stone-600", profile.avatarColor)}>
-            {profile.initials}
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-stone-600", profile!.avatarColor)}>
+            {profile!.initials}
           </div>
           <h1 className="text-lg font-semibold tracking-tight">Gathered</h1>
         </div>
@@ -355,7 +510,17 @@ function AppContent() {
             >
               {view === 'calendar' && <CalendarView group={group} profile={profile!} />}
               {view === 'prayers' && <PrayerView group={group} profile={profile!} />}
-              {view === 'settings' && <SettingsView profile={profile!} group={group} />}
+              {view === 'settings' && (
+                <SettingsView
+                  profile={profile!}
+                  group={group}
+                  groups={groups}
+                  onSwitchGroup={switchGroup}
+                  onJoinGroup={joinGroup}
+                  onCreateGroup={createGroup}
+                  onLeaveGroup={leaveGroup}
+                />
+              )}
             </motion.div>
           ) : (
             <div className="min-h-[50vh] flex items-center justify-center">
@@ -464,57 +629,44 @@ function AuthScreen() {
 }
 
 // --- Onboarding Screen ---
-function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
+function OnboardingScreen({
+  profile,
+  onJoin,
+  onCreate,
+}: {
+  profile: UserProfile | null;
+  onJoin: (inviteCode: string) => Promise<void>;
+  onCreate: (name: string) => Promise<void>;
+}) {
   const [inviteCode, setInviteCode] = useState('');
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'choice' | 'join' | 'create'>('choice');
+  const [busy, setBusy] = useState(false);
 
   const handleJoin = async () => {
+    if (!profile || !inviteCode.trim()) return;
     setError('');
+    setBusy(true);
     try {
-      const q = query(collection(db, 'groups'), where('inviteCode', '==', inviteCode.toUpperCase()), limit(1));
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
-        setError('Invalid invite code');
-        return;
-      }
-      const groupDoc = querySnapshot.docs[0];
-      const groupData = groupDoc.data();
-      if (groupData.memberUids.length >= 5) {
-        setError('Group is full');
-        return;
-      }
-      await updateDoc(doc(db, 'groups', groupDoc.id), {
-        memberUids: arrayUnion(profile!.uid)
-      });
-      await updateDoc(doc(db, 'users', profile!.uid), {
-        groupId: groupDoc.id
-      });
+      await onJoin(inviteCode);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.UPDATE, `groups/${inviteCode}`);
+      setError(err instanceof Error ? err.message : 'Failed to join');
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleCreate = async () => {
+    if (!profile || !groupName.trim()) return;
     setError('');
+    setBusy(true);
     try {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 for clarity
-      let code = '';
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      const groupRef = await addDoc(collection(db, 'groups'), {
-        name: groupName,
-        inviteCode: code,
-        memberUids: [profile!.uid],
-        createdAt: serverTimestamp()
-      });
-      await updateDoc(doc(db, 'users', profile!.uid), {
-        groupId: groupRef.id
-      });
+      await onCreate(groupName);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, 'groups/users');
+      setError(err instanceof Error ? err.message : 'Failed to create');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -567,9 +719,10 @@ function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <button 
                 onClick={handleJoin}
-                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors"
+                disabled={busy}
+                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors disabled:opacity-50"
               >
-                Join Group
+                {busy ? 'Joining…' : 'Join Group'}
               </button>
             </div>
           </div>
@@ -592,9 +745,10 @@ function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <button 
                 onClick={handleCreate}
-                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors"
+                disabled={busy}
+                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors disabled:opacity-50"
               >
-                Create Group
+                {busy ? 'Creating…' : 'Create Group'}
               </button>
             </div>
           </div>
@@ -1147,12 +1301,33 @@ function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerReques
 }
 
 // --- Settings View ---
-function SettingsView({ profile, group }: { profile: UserProfile, group: Group }) {
+function SettingsView({
+  profile,
+  group,
+  groups,
+  onSwitchGroup,
+  onJoinGroup,
+  onCreateGroup,
+  onLeaveGroup,
+}: {
+  profile: UserProfile;
+  group: Group;
+  groups: Group[];
+  onSwitchGroup: (groupId: string) => Promise<void>;
+  onJoinGroup: (inviteCode: string) => Promise<void>;
+  onCreateGroup: (name: string) => Promise<void>;
+  onLeaveGroup: (groupId: string) => Promise<void>;
+}) {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [avatarColor, setAvatarColor] = useState(profile.avatarColor);
   const [initials, setInitials] = useState(profile.initials);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [groupAction, setGroupAction] = useState<'idle' | 'join' | 'create'>('idle');
+  const [inviteCode, setInviteCode] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
+  const [groupError, setGroupError] = useState('');
+  const [groupBusy, setGroupBusy] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1173,6 +1348,34 @@ function SettingsView({ profile, group }: { profile: UserProfile, group: Group }
     navigator.clipboard.writeText(group.inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleJoinAnother = async () => {
+    setGroupError('');
+    setGroupBusy(true);
+    try {
+      await onJoinGroup(inviteCode);
+      setInviteCode('');
+      setGroupAction('idle');
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : 'Failed to join');
+    } finally {
+      setGroupBusy(false);
+    }
+  };
+
+  const handleCreateAnother = async () => {
+    setGroupError('');
+    setGroupBusy(true);
+    try {
+      await onCreateGroup(newGroupName);
+      setNewGroupName('');
+      setGroupAction('idle');
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : 'Failed to create');
+    } finally {
+      setGroupBusy(false);
+    }
   };
 
   return (
@@ -1231,15 +1434,57 @@ function SettingsView({ profile, group }: { profile: UserProfile, group: Group }
       </section>
 
       <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
-        <h3 className="text-lg font-bold text-stone-900">Group Info</h3>
-        <div className="p-4 bg-stone-50 rounded-xl border border-stone-100">
-          <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Group Name</p>
-          <p className="text-stone-900 font-semibold">{group.name}</p>
+        <h3 className="text-lg font-bold text-stone-900">Your Groups</h3>
+        <p className="text-sm text-stone-500">Click a group to make it active for calendar and prayers.</p>
+
+        <div className="space-y-2">
+          {groups.map((g) => {
+            const active = g.id === group.id;
+            return (
+              <div
+                key={g.id}
+                className={cn(
+                  'flex items-center gap-3 p-3 rounded-xl border',
+                  active ? 'border-stone-300 bg-stone-50' : 'border-stone-100'
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!active) onSwitchGroup(g.id).catch(console.error);
+                  }}
+                  className="flex-1 text-left"
+                >
+                  <p className="font-semibold text-stone-900">{g.name}</p>
+                  <p className="text-xs text-stone-500">
+                    {g.memberUids.length} {g.memberUids.length === 1 ? 'member' : 'members'}
+                    {active ? ' · Active' : ''}
+                  </p>
+                </button>
+                {active && <Check size={18} className="text-emerald-600" />}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Leave “${g.name}”? You can rejoin later with an invite code.`)) {
+                      onLeaveGroup(g.id).catch((err) =>
+                        alert(err instanceof Error ? err.message : 'Failed to leave')
+                      );
+                    }
+                  }}
+                  className="text-sm font-medium text-red-500 hover:text-red-600 px-2"
+                >
+                  Leave
+                </button>
+              </div>
+            );
+          })}
         </div>
+
         <div className="p-4 bg-stone-50 rounded-xl border border-stone-100 flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Invite Code</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Active invite code</p>
             <p className="text-stone-900 font-mono font-bold text-lg">{group.inviteCode}</p>
+            <p className="text-xs text-stone-400 mt-1">Share to invite friends to {group.name}</p>
           </div>
           <button 
             onClick={copyInviteCode}
@@ -1248,6 +1493,83 @@ function SettingsView({ profile, group }: { profile: UserProfile, group: Group }
             {copied ? <Check size={20} className="text-emerald-500" /> : <Copy size={20} />}
           </button>
         </div>
+
+        {groupAction === 'idle' && (
+          <div className="grid gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setGroupError('');
+                setGroupAction('join');
+              }}
+              className="w-full py-3 border border-stone-200 rounded-xl font-medium text-stone-900 hover:bg-stone-50"
+            >
+              Join another group
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGroupError('');
+                setGroupAction('create');
+              }}
+              className="w-full py-3 border border-stone-200 rounded-xl font-medium text-stone-900 hover:bg-stone-50"
+            >
+              Create another group
+            </button>
+          </div>
+        )}
+
+        {groupAction === 'join' && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Invite code"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              className="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl uppercase"
+            />
+            {groupError && <p className="text-red-500 text-xs">{groupError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setGroupAction('idle')} className="px-4 py-2 text-stone-500 font-medium">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleJoinAnother}
+                disabled={groupBusy || !inviteCode.trim()}
+                className="flex-1 py-2 bg-stone-900 text-white rounded-xl font-medium disabled:opacity-50"
+              >
+                {groupBusy ? 'Joining…' : 'Join'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {groupAction === 'create' && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Group name"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              className="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl"
+            />
+            {groupError && <p className="text-red-500 text-xs">{groupError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setGroupAction('idle')} className="px-4 py-2 text-stone-500 font-medium">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateAnother}
+                disabled={groupBusy || !newGroupName.trim()}
+                className="flex-1 py-2 bg-stone-900 text-white rounded-xl font-medium disabled:opacity-50"
+              >
+                {groupBusy ? 'Creating…' : 'Create'}
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <button 

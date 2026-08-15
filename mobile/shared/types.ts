@@ -4,7 +4,10 @@ export interface UserProfile {
   email: string;
   avatarColor: string;
   initials: string;
+  /** Active group (calendar/prayers). Back-compat with single-group users. */
   groupId?: string;
+  /** All group memberships. */
+  groupIds?: string[];
   expoPushToken?: string;
 }
 

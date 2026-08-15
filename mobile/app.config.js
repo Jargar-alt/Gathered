@@ -23,7 +23,6 @@ module.exports = {
     supportsTablet: true,
     bundleIdentifier: 'com.acuratls.gathered',
     buildNumber: '1',
-    usesAppleSignIn: true,
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
       ITSAppUsesNonExemptEncryption: false,
@@ -58,7 +57,6 @@ module.exports = {
         },
       },
     ],
-    'expo-apple-authentication',
     googleSignInPlugin,
     [
       'expo-splash-screen',

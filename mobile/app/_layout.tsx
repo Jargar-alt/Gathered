@@ -17,11 +17,13 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'onboarding';
 
+    const hasGroups = Boolean(profile?.groupIds?.length || profile?.groupId);
+
     if (!user && !inAuthGroup) {
       router.replace('/login');
-    } else if (user && !profile?.groupId && segments[0] !== 'onboarding') {
+    } else if (user && !hasGroups && segments[0] !== 'onboarding') {
       router.replace('/onboarding');
-    } else if (user && profile?.groupId && inAuthGroup) {
+    } else if (user && hasGroups && inAuthGroup) {
       router.replace('/(tabs)/calendar');
     }
   }, [user, profile, loading, segments]);

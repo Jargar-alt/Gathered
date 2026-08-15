@@ -1,6 +1,6 @@
 # Authentication Setup (Mobile)
 
-Gathered supports **Sign in with Apple**, **Google**, and **email/password** via Firebase Authentication.
+Gathered supports **Google** and **email/password** via Firebase Authentication.
 
 ## 1. Firebase Console
 
@@ -9,50 +9,25 @@ Gathered supports **Sign in with Apple**, **Google**, and **email/password** via
 3. Enable:
    - **Email/Password**
    - **Google**
-   - **Apple**
 
 ### Google
-- Enable Google provider
-- Copy the **Web client ID** (ends in `.apps.googleusercontent.com`)
-- Set as `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in EAS or `mobile/.env.local`
+- Enable Google provider on **Gathered** (not another Firebase project)
+- Web client ID must start with `1074128724577-` (Gathered project number)
+- Create an **iOS** OAuth client in Google Cloud for bundle ID `com.acuratls.gathered`
+- App config lives in `mobile/auth.config.js` and `mobile/eas.json`
 
-### Apple
-- Enable Apple provider
-- In [Apple Developer](https://developer.apple.com/account) → **Identifiers** → `com.acuratls.gathered`:
-  - Enable **Sign in with Apple** capability
-- In Firebase Apple setup, configure your Apple Team ID (`P9V25CHLW2`) and Key ID / private key if prompted
+## 2. Rebuild required
 
-## 2. Google Cloud (iOS)
-
-1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials
-2. Create **OAuth client ID** → **iOS**
-3. Bundle ID: `com.acuratls.gathered`
-4. Copy:
-   - **iOS client ID** → `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`
-   - **iOS URL scheme** (reversed client ID) → `EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME`
-
-## 3. Environment variables
-
-For local dev, copy `mobile/.env.example` to `mobile/.env.local`.
-
-For EAS builds, add secrets:
+Google Sign-In uses native modules and URL schemes. After changing OAuth client IDs:
 
 ```bash
 cd mobile
-eas secret:create --scope project --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value "YOUR_WEB_CLIENT_ID"
-eas secret:create --scope project --name EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID --value "YOUR_IOS_CLIENT_ID"
-eas secret:create --scope project --name EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME --value "com.googleusercontent.apps.XXXX"
-```
-
-Or set in [expo.dev](https://expo.dev) → Project → Environment variables → **production**.
-
-## 4. Rebuild required
-
-Google and Apple sign-in use native modules. After configuring env vars, create a **new development or production build**:
-
-```bash
-npm run build:dev        # dev client
+npm run build:dev        # test on device
 npm run build:ios        # App Store
 ```
 
 Email/password works without OAuth env vars.
+
+## App Store note
+
+Apple guideline 4.8: if you offer a third-party login (Google), App Review often requires **Sign in with Apple** as an equivalent option. Re-add Apple before submit if Review asks for it.

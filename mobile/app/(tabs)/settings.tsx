@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -17,14 +18,29 @@ import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
 import { AVATAR_COLORS, AVATAR_COLOR_MAP } from '@shared/constants';
 
+type GroupAction = 'idle' | 'join' | 'create';
+
 export default function SettingsScreen() {
-  const { profile, group } = useAuth();
+  const {
+    profile,
+    group,
+    groups,
+    switchGroup,
+    joinGroup,
+    createGroup,
+    leaveGroup,
+  } = useAuth();
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [avatarColor, setAvatarColor] = useState(profile?.avatarColor ?? AVATAR_COLORS[0]);
   const [initials, setInitials] = useState(profile?.initials ?? '');
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [groupAction, setGroupAction] = useState<GroupAction>('idle');
+  const [inviteCode, setInviteCode] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
+  const [groupError, setGroupError] = useState('');
+  const [groupBusy, setGroupBusy] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -66,6 +82,53 @@ export default function SettingsScreen() {
     await Clipboard.setStringAsync(group.inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleJoinAnother = async () => {
+    setGroupError('');
+    setGroupBusy(true);
+    try {
+      await joinGroup(inviteCode);
+      setInviteCode('');
+      setGroupAction('idle');
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : 'Failed to join');
+    } finally {
+      setGroupBusy(false);
+    }
+  };
+
+  const handleCreateAnother = async () => {
+    setGroupError('');
+    setGroupBusy(true);
+    try {
+      await createGroup(newGroupName);
+      setNewGroupName('');
+      setGroupAction('idle');
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : 'Failed to create');
+    } finally {
+      setGroupBusy(false);
+    }
+  };
+
+  const confirmLeave = (groupId: string, name: string) => {
+    Alert.alert(
+      'Leave group?',
+      `You will leave “${name}”. You can rejoin later with an invite code.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            leaveGroup(groupId).catch((err) => {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to leave');
+            });
+          },
+        },
+      ]
+    );
   };
 
   const previewProfile = { ...profile, displayName, avatarColor, initials };
@@ -140,25 +203,54 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Your group</Text>
+        <Text style={styles.sectionLabel}>Your groups</Text>
+        <Text style={styles.sectionHint}>Tap a group to make it active for calendar and prayers</Text>
 
-        <View style={styles.groupRow}>
-          <View style={styles.groupIcon}>
-            <Ionicons name="people-outline" size={20} color="#57534e" />
-          </View>
-          <View style={styles.groupInfo}>
-            <Text style={styles.groupName}>{group.name}</Text>
-            <Text style={styles.groupMeta}>
-              {group.memberUids.length} {group.memberUids.length === 1 ? 'member' : 'members'}
-            </Text>
-          </View>
-        </View>
+        {groups.map((g) => {
+          const active = g.id === group.id;
+          return (
+            <View key={g.id} style={[styles.groupListRow, active && styles.groupListRowActive]}>
+              <Pressable
+                style={styles.groupListMain}
+                onPress={() => {
+                  if (!active) switchGroup(g.id).catch(console.error);
+                }}
+              >
+                <View style={styles.groupIcon}>
+                  <Ionicons
+                    name={active ? 'people' : 'people-outline'}
+                    size={20}
+                    color="#57534e"
+                  />
+                </View>
+                <View style={styles.groupInfo}>
+                  <Text style={styles.groupName}>{g.name}</Text>
+                  <Text style={styles.groupMeta}>
+                    {g.memberUids.length}{' '}
+                    {g.memberUids.length === 1 ? 'member' : 'members'}
+                    {active ? ' · Active' : ''}
+                  </Text>
+                </View>
+                {active ? (
+                  <Ionicons name="checkmark-circle" size={22} color="#047857" />
+                ) : null}
+              </Pressable>
+              <Pressable
+                onPress={() => confirmLeave(g.id, g.name)}
+                style={styles.leaveBtn}
+                hitSlop={8}
+              >
+                <Text style={styles.leaveBtnText}>Leave</Text>
+              </Pressable>
+            </View>
+          );
+        })}
 
         <View style={styles.inviteCard}>
-          <View>
-            <Text style={styles.inviteLabel}>Invite code</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.inviteLabel}>Active invite code</Text>
             <Text style={styles.inviteCode}>{group.inviteCode}</Text>
-            <Text style={styles.inviteHint}>Share with friends to join your group</Text>
+            <Text style={styles.inviteHint}>Share to invite friends to {group.name}</Text>
           </View>
           <Pressable onPress={copyInviteCode} style={styles.copyBtn}>
             <Ionicons
@@ -171,6 +263,94 @@ export default function SettingsScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {groupAction === 'idle' && (
+          <View style={styles.groupActions}>
+            <Pressable
+              onPress={() => {
+                setGroupError('');
+                setGroupAction('join');
+              }}
+              style={styles.secondaryBtn}
+            >
+              <Ionicons name="enter-outline" size={18} color="#1c1917" />
+              <Text style={styles.secondaryBtnText}>Join another group</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setGroupError('');
+                setGroupAction('create');
+              }}
+              style={styles.secondaryBtn}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#1c1917" />
+              <Text style={styles.secondaryBtnText}>Create another group</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {groupAction === 'join' && (
+          <View style={styles.inlineForm}>
+            <Text style={styles.label}>Invite code</Text>
+            <TextInput
+              style={styles.input}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="characters"
+              placeholder="AB12CD"
+              placeholderTextColor="#a8a29e"
+              editable={!groupBusy}
+            />
+            {groupError ? <Text style={styles.error}>{groupError}</Text> : null}
+            <View style={styles.inlineActions}>
+              <Pressable
+                onPress={() => setGroupAction('idle')}
+                style={styles.cancelBtn}
+                disabled={groupBusy}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleJoinAnother}
+                style={[styles.saveBtn, styles.inlinePrimary, groupBusy && styles.saveBtnDisabled]}
+                disabled={groupBusy || !inviteCode.trim()}
+              >
+                <Text style={styles.saveBtnText}>{groupBusy ? 'Joining…' : 'Join'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {groupAction === 'create' && (
+          <View style={styles.inlineForm}>
+            <Text style={styles.label}>Group name</Text>
+            <TextInput
+              style={styles.input}
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+              placeholder="e.g. Wednesday Bible Study"
+              placeholderTextColor="#a8a29e"
+              editable={!groupBusy}
+            />
+            {groupError ? <Text style={styles.error}>{groupError}</Text> : null}
+            <View style={styles.inlineActions}>
+              <Pressable
+                onPress={() => setGroupAction('idle')}
+                style={styles.cancelBtn}
+                disabled={groupBusy}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleCreateAnother}
+                style={[styles.saveBtn, styles.inlinePrimary, groupBusy && styles.saveBtnDisabled]}
+                disabled={groupBusy || !newGroupName.trim()}
+              >
+                <Text style={styles.saveBtnText}>{groupBusy ? 'Creating…' : 'Create'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
 
       <Pressable onPress={() => signOut(auth)} style={styles.signOutBtn}>
@@ -274,17 +454,30 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  groupRow: {
+  groupListRow: {
+    borderWidth: 1,
+    borderColor: '#f5f5f4',
+    borderRadius: 14,
+    backgroundColor: '#fafaf9',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  groupListRowActive: {
+    borderColor: '#d6d3d1',
+    backgroundColor: '#fff',
+  },
+  groupListMain: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingBottom: 4,
+    paddingVertical: 6,
   },
   groupIcon: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#fafaf9',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#f5f5f4',
     alignItems: 'center',
@@ -302,6 +495,16 @@ const styles = StyleSheet.create({
   groupMeta: {
     fontSize: 13,
     color: '#78716c',
+  },
+  leaveBtn: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+  },
+  leaveBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#dc2626',
   },
   inviteCard: {
     flexDirection: 'row',
@@ -349,6 +552,42 @@ const styles = StyleSheet.create({
   copyBtnTextSuccess: {
     color: '#047857',
   },
+  groupActions: { gap: 8 },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+  },
+  secondaryBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1c1917',
+  },
+  inlineForm: { gap: 10 },
+  inlineActions: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  inlinePrimary: {
+    flex: 1,
+    marginTop: 0,
+  },
+  cancelBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#78716c',
+  },
+  error: { color: '#ef4444', fontSize: 13 },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

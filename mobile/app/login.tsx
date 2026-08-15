@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -10,19 +10,15 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import {
-  checkAppleSignInAvailable,
   getAuthErrorMessage,
   isGoogleSignInAvailable,
-  signInWithApple,
   signInWithGoogle,
 } from '@/lib/socialAuth';
 
@@ -32,12 +28,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(false);
   const googleAvailable = isGoogleSignInAvailable();
-
-  useEffect(() => {
-    checkAppleSignInAvailable().then(setAppleAvailable);
-  }, []);
 
   const handleEmailAuth = async () => {
     setError('');
@@ -67,35 +58,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleApple = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const { displayName } = await signInWithApple();
-      const user = auth.currentUser;
-      if (user && displayName) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          displayName,
-          initials: displayName
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2),
-        });
-      }
-    } catch (err: unknown) {
-      const message = getAuthErrorMessage(err);
-      if (!message.toLowerCase().includes('cancel')) {
-        setError(message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const showSocial = googleAvailable || appleAvailable;
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -108,34 +70,16 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Where your group reads, prays, and shows up together.</Text>
           </View>
 
-          {showSocial && (
+          {googleAvailable && (
             <View style={styles.socialSection}>
-              {appleAvailable && (
-                <AppleAuthentication.AppleAuthenticationButton
-                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                  cornerRadius={12}
-                  style={styles.appleBtn}
-                  onPress={handleApple}
-                />
-              )}
-
-              {googleAvailable && (
-                <Pressable
-                  onPress={handleGoogle}
-                  disabled={loading}
-                  style={[styles.googleBtn, loading && styles.disabled]}
-                >
-                  <Ionicons name="logo-google" size={18} color="#1c1917" />
-                  <Text style={styles.googleBtnText}>Continue with Google</Text>
-                </Pressable>
-              )}
-
-              {!googleAvailable && Platform.OS === 'ios' && (
-                <Text style={styles.configHint}>
-                  Google Sign-In needs a rebuild with Google client IDs configured.
-                </Text>
-              )}
+              <Pressable
+                onPress={handleGoogle}
+                disabled={loading}
+                style={[styles.googleBtn, loading && styles.disabled]}
+              >
+                <Ionicons name="logo-google" size={18} color="#1c1917" />
+                <Text style={styles.googleBtnText}>Continue with Google</Text>
+              </Pressable>
 
               <View style={styles.dividerRow}>
                 <View style={styles.divider} />
@@ -210,7 +154,7 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 16,
+    padding: 24,
   },
   card: {
     backgroundColor: '#fff',
@@ -235,7 +179,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   socialSection: { gap: 12, marginBottom: 8 },
-  appleBtn: { width: '100%', height: 48 },
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -248,12 +191,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   googleBtnText: { fontSize: 15, fontWeight: '600', color: '#1c1917' },
-  configHint: {
-    fontSize: 11,
-    color: '#a8a29e',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -266,16 +203,15 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     color: '#78716c',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   input: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fafaf9',
     borderWidth: 1,
     borderColor: '#e7e5e4',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
     fontSize: 15,
     marginBottom: 4,
@@ -295,5 +231,5 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   switchBtn: { marginTop: 24, alignItems: 'center' },
   switchText: { fontSize: 14, color: '#78716c' },
-  switchLink: { fontWeight: '700', color: '#1c1917', textDecorationLine: 'underline' },
+  switchLink: { fontWeight: '600', color: '#1c1917' },
 });

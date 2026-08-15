@@ -52,4 +52,4 @@ To host for App Store Connect, enable **GitHub Pages** on this repo:
 
 ## Mobile authentication
 
-See [`docs/AUTH_SETUP.md`](docs/AUTH_SETUP.md) for Google, Apple, and email/password setup.
+See [`docs/AUTH_SETUP.md`](docs/AUTH_SETUP.md) for Google and email/password setup.

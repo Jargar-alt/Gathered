@@ -1,10 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Crypto from 'expo-crypto';
 import {
   GoogleAuthProvider,
-  OAuthProvider,
   signInWithCredential,
 } from 'firebase/auth';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
@@ -52,15 +49,6 @@ export function isGoogleSignInAvailable(): boolean {
   return Boolean(getGoogleConfig().webClientId);
 }
 
-export function isAppleSignInAvailable(): boolean {
-  return Platform.OS === 'ios' && AppleAuthentication.isAvailableAsync !== undefined;
-}
-
-export async function checkAppleSignInAvailable(): Promise<boolean> {
-  if (Platform.OS !== 'ios') return false;
-  return AppleAuthentication.isAvailableAsync();
-}
-
 export async function signInWithGoogle(): Promise<void> {
   const { webClientId } = getGoogleConfig();
   if (!webClientId) {
@@ -88,48 +76,6 @@ export async function signInWithGoogle(): Promise<void> {
   await signInWithCredential(auth, credential);
 }
 
-export type AppleSignInResult = {
-  displayName?: string;
-};
-
-export async function signInWithApple(): Promise<AppleSignInResult> {
-  const available = await checkAppleSignInAvailable();
-  if (!available) {
-    throw new Error('Sign in with Apple is not available on this device.');
-  }
-
-  const nonce = Crypto.randomUUID();
-  const hashedNonce = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    nonce
-  );
-
-  const appleCredential = await AppleAuthentication.signInAsync({
-    requestedScopes: [
-      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-      AppleAuthentication.AppleAuthenticationScope.EMAIL,
-    ],
-    nonce: hashedNonce,
-  });
-
-  if (!appleCredential.identityToken) {
-    throw new Error('Apple Sign-In did not return an identity token.');
-  }
-
-  const provider = new OAuthProvider('apple.com');
-  const credential = provider.credential({
-    idToken: appleCredential.identityToken,
-    rawNonce: nonce,
-  });
-  await signInWithCredential(auth, credential);
-
-  const given = appleCredential.fullName?.givenName ?? '';
-  const family = appleCredential.fullName?.familyName ?? '';
-  const displayName = [given, family].filter(Boolean).join(' ').trim();
-
-  return { displayName: displayName || undefined };
-}
-
 export function getAuthErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'code' in error) {
     const code = String((error as { code: string }).code);
@@ -140,7 +86,10 @@ export function getAuthErrorMessage(error: unknown): string {
 
   if (error instanceof Error) {
     if (error.message.includes('auth/invalid-credential')) {
-      return 'Sign-in failed. Check that Google and Apple are enabled in Firebase Authentication.';
+      return 'Sign-in failed. Check that Google is enabled in Firebase Authentication.';
+    }
+    if (error.message.includes('auth/operation-not-allowed')) {
+      return 'This sign-in method is not enabled. Enable it in Firebase Authentication.';
     }
     if (error.message.includes('auth/account-exists-with-different-credential')) {
       return 'An account already exists with this email using a different sign-in method.';
