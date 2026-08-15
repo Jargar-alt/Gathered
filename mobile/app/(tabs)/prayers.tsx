@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   StyleSheet,
   ActivityIndicator,
@@ -12,6 +11,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import PrayerCard from '@/components/PrayerCard';
 import PrayerForm from '@/components/PrayerForm';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { PrayerRequest, UserProfile } from '@shared/types';
 
 export default function PrayersScreen() {
@@ -21,19 +21,29 @@ export default function PrayersScreen() {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    if (!group) return;
+    if (!group || !profile?.uid || !group.memberUids.includes(profile.uid)) {
+      setPrayers([]);
+      return;
+    }
     const q = query(collection(db, 'prayers'), where('groupId', '==', group.id));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const sorted = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as PrayerRequest))
-        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setPrayers(sorted);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const sorted = snapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() } as PrayerRequest))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setPrayers(sorted);
+      },
+      (error) => {
+        console.error('Prayers listener error:', error);
+        setPrayers([]);
+      }
+    );
     return unsubscribe;
-  }, [group?.id]);
+  }, [group?.id, group?.memberUids, profile?.uid]);
 
   useEffect(() => {
-    if (!group) return;
+    if (!group || !profile?.uid || !group.memberUids.includes(profile.uid)) return;
     const fetchMembers = async () => {
       const memberData: Record<string, UserProfile> = {};
       for (const uid of group.memberUids) {
@@ -45,7 +55,7 @@ export default function PrayersScreen() {
       setMembers(memberData);
     };
     fetchMembers();
-  }, [group?.memberUids]);
+  }, [group?.memberUids, profile?.uid]);
 
   if (!profile || !group) {
     return (
@@ -56,7 +66,7 @@ export default function PrayersScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen contentContainerStyle={styles.content} style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Prayers & Praise</Text>
         <Pressable onPress={() => setShowForm(true)} style={styles.newBtn}>
@@ -87,13 +97,13 @@ export default function PrayersScreen() {
           />
         ))
       )}
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafaf9' },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { padding: 16, paddingBottom: 120 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',

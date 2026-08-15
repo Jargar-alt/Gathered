@@ -430,17 +430,21 @@ function AppContent() {
     const nextActive =
       profile.groupId === groupId ? remaining[0] ?? null : profile.groupId ?? null;
 
-    await updateDoc(doc(db, 'groups', groupId), {
-      memberUids: arrayRemove(profile.uid),
-    });
-
+    // Update profile first so listeners drop this groupId before memberUids changes.
     const userUpdate: Record<string, unknown> = { groupIds: remaining };
     if (nextActive) {
       userUpdate.groupId = nextActive;
     } else {
       userUpdate.groupId = deleteField();
     }
+    if (profile.groupId === groupId) {
+      setGroup(null);
+    }
     await updateDoc(doc(db, 'users', profile.uid), userUpdate);
+
+    await updateDoc(doc(db, 'groups', groupId), {
+      memberUids: arrayRemove(profile.uid),
+    });
   }, [profile]);
 
   if (loading) {
@@ -797,7 +801,10 @@ function CalendarView({ group, profile }: { group: Group, profile: UserProfile }
   }, [currentDate]);
 
   const getEntriesForDay = (day: Date) => {
-    return entries.filter(e => isSameDay(new Date(e.date), day));
+    return entries.filter((e) => {
+      const [y, m, d] = e.date.split('-').map(Number);
+      return isSameDay(new Date(y, m - 1, d), day);
+    });
   };
 
   return (

@@ -135,31 +135,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Live profile updates (after join/switch/leave from this or another device)
   useEffect(() => {
     if (!user?.uid) return;
-    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-      if (snap.exists()) {
-        setProfile(normalizeMembership(snap.data() as UserProfile));
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setProfile(normalizeMembership(snap.data() as UserProfile));
+        }
+      },
+      (error) => {
+        console.error('Profile listener error:', error);
       }
-    });
+    );
     return unsubscribe;
   }, [user?.uid]);
 
   useEffect(() => {
-    if (profile?.groupId) {
-      const unsubscribe = onSnapshot(doc(db, 'groups', profile.groupId), (docSnap) => {
-        if (docSnap.exists()) {
-          setGroup({ id: docSnap.id, ...docSnap.data() } as Group);
-        } else {
-          setGroup(null);
-        }
-      });
-      return unsubscribe;
+    if (!profile?.groupId || !profile.uid) {
+      setGroup(null);
+      return;
     }
-    setGroup(null);
-  }, [profile?.groupId]);
+
+    const activeGroupId = profile.groupId;
+    const uid = profile.uid;
+    const unsubscribe = onSnapshot(
+      doc(db, 'groups', activeGroupId),
+      (docSnap) => {
+        const data = docSnap.exists() ? docSnap.data() : null;
+        const memberUids: string[] = data?.memberUids ?? [];
+        // Groups are readable by any authenticated user; only expose as
+        // active group when the user is actually in memberUids (required by
+        // readings/prayers rules). Otherwise heal stale profile fields.
+        if (!data || !memberUids.includes(uid)) {
+          setGroup(null);
+          const remaining = (profile.groupIds ?? []).filter((id) => id !== activeGroupId);
+          const userUpdate: Record<string, unknown> = { groupIds: remaining };
+          if (remaining[0]) {
+            userUpdate.groupId = remaining[0];
+          } else {
+            userUpdate.groupId = deleteField();
+          }
+          updateDoc(doc(db, 'users', uid), userUpdate).catch((err) => {
+            console.error('Failed to heal stale group membership:', err);
+          });
+          return;
+        }
+        setGroup({ id: docSnap.id, ...data } as Group);
+      },
+      (error) => {
+        console.error('Active group listener error:', error);
+        setGroup(null);
+      }
+    );
+    return unsubscribe;
+  }, [profile?.groupId, profile?.uid, profile?.groupIds?.join(',')]);
 
   useEffect(() => {
     const ids = profile?.groupIds ?? [];
-    if (ids.length === 0) {
+    const uid = profile?.uid;
+    if (ids.length === 0 || !uid) {
       setGroups([]);
       return;
     }
@@ -167,19 +200,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       const loaded: Group[] = [];
+      const validIds: string[] = [];
       for (const id of ids) {
         const snap = await getDoc(doc(db, 'groups', id));
-        if (snap.exists()) {
-          loaded.push({ id: snap.id, ...snap.data() } as Group);
+        if (!snap.exists()) continue;
+        const data = snap.data();
+        if ((data.memberUids ?? []).includes(uid)) {
+          loaded.push({ id: snap.id, ...data } as Group);
+          validIds.push(id);
         }
       }
-      if (!cancelled) setGroups(loaded);
+      if (cancelled) return;
+      setGroups(loaded);
+
+      // Drop groupIds that no longer include this user (or missing groups)
+      if (validIds.length !== ids.length) {
+        const nextActive =
+          profile.groupId && validIds.includes(profile.groupId)
+            ? profile.groupId
+            : validIds[0] ?? null;
+        const userUpdate: Record<string, unknown> = { groupIds: validIds };
+        if (nextActive) {
+          userUpdate.groupId = nextActive;
+        } else {
+          userUpdate.groupId = deleteField();
+        }
+        await updateDoc(doc(db, 'users', uid), userUpdate);
+      }
     })().catch(console.error);
 
     return () => {
       cancelled = true;
     };
-  }, [profile?.groupIds?.join(',')]);
+  }, [profile?.groupIds?.join(','), profile?.uid]);
 
   useEffect(() => {
     if (profile?.uid) {
@@ -257,10 +310,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextActive =
         profile.groupId === groupId ? remaining[0] ?? null : profile.groupId ?? null;
 
-      await updateDoc(doc(db, 'groups', groupId), {
-        memberUids: arrayRemove(profile.uid),
-      });
-
+      // Update the user profile first so calendar/prayers unsubscribe from this
+      // groupId before memberUids loses the uid (avoids permission-denied).
       const userUpdate: Record<string, unknown> = {
         groupIds: remaining,
       };
@@ -269,8 +320,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         userUpdate.groupId = deleteField();
       }
-
+      if (profile.groupId === groupId) {
+        setGroup(null);
+      }
       await updateDoc(doc(db, 'users', profile.uid), userUpdate);
+
+      await updateDoc(doc(db, 'groups', groupId), {
+        memberUids: arrayRemove(profile.uid),
+      });
     },
     [profile]
   );

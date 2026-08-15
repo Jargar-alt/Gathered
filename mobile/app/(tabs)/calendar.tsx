@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   TextInput,
   StyleSheet,
@@ -34,6 +33,8 @@ import {
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { parseLocalDate } from '@/lib/dates';
 import { ReadingEntry, UserProfile } from '@shared/types';
 import { REACTIONS, AVATAR_COLOR_MAP } from '@shared/constants';
 
@@ -46,16 +47,26 @@ export default function CalendarScreen() {
   const [members, setMembers] = useState<Record<string, UserProfile>>({});
 
   useEffect(() => {
-    if (!group) return;
+    if (!group || !profile?.uid || !group.memberUids.includes(profile.uid)) {
+      setEntries([]);
+      return;
+    }
     const q = query(collection(db, 'readings'), where('groupId', '==', group.id));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ReadingEntry)));
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ReadingEntry)));
+      },
+      (error) => {
+        console.error('Readings listener error:', error);
+        setEntries([]);
+      }
+    );
     return unsubscribe;
-  }, [group?.id]);
+  }, [group?.id, group?.memberUids, profile?.uid]);
 
   useEffect(() => {
-    if (!group) return;
+    if (!group || !profile?.uid || !group.memberUids.includes(profile.uid)) return;
     const fetchMembers = async () => {
       const memberData: Record<string, UserProfile> = {};
       for (const uid of group.memberUids) {
@@ -65,7 +76,7 @@ export default function CalendarScreen() {
       setMembers(memberData);
     };
     fetchMembers();
-  }, [group?.memberUids]);
+  }, [group?.memberUids, profile?.uid]);
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentDate));
@@ -74,7 +85,7 @@ export default function CalendarScreen() {
   }, [currentDate]);
 
   const getEntriesForDay = (day: Date) =>
-    entries.filter((e) => isSameDay(new Date(e.date), day));
+    entries.filter((e) => isSameDay(parseLocalDate(e.date), day));
 
   if (!profile || !group) {
     return (
@@ -85,7 +96,7 @@ export default function CalendarScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen contentContainerStyle={styles.content} style={styles.container}>
       <View style={styles.monthHeader}>
         <Text style={styles.title}>{format(currentDate, 'MMMM yyyy')}</Text>
         <View style={styles.nav}>
@@ -112,7 +123,7 @@ export default function CalendarScreen() {
 
           return (
             <Pressable
-              key={day.toISOString()}
+              key={format(day, 'yyyy-MM-dd')}
               onPress={() => { setSelectedDay(day); setShowEntryForm(false); }}
               style={[
                 styles.dayCell,
@@ -178,7 +189,7 @@ export default function CalendarScreen() {
           )}
         </View>
       )}
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 
@@ -295,7 +306,7 @@ function ReadingCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafaf9' },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { padding: 16, paddingBottom: 120 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   monthHeader: {
     flexDirection: 'row',

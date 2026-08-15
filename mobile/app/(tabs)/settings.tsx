@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  ScrollView,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -16,6 +15,7 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { AVATAR_COLORS, AVATAR_COLOR_MAP } from '@shared/constants';
 
 type GroupAction = 'idle' | 'join' | 'create';
@@ -134,7 +134,7 @@ export default function SettingsScreen() {
   const previewProfile = { ...profile, displayName, avatarColor, initials };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen contentContainerStyle={styles.content} style={styles.container}>
       <View style={styles.heroCard}>
         <Avatar profile={previewProfile} size="lg" />
         <Text style={styles.heroName}>{displayName || 'Your Name'}</Text>
@@ -357,13 +357,13 @@ export default function SettingsScreen() {
         <Ionicons name="log-out-outline" size={18} color="#dc2626" />
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafaf9' },
-  content: { padding: 16, paddingBottom: 40, gap: 12 },
+  content: { padding: 16, paddingBottom: 120, gap: 12 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   heroCard: {
     backgroundColor: '#fff',
