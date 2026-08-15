@@ -23,9 +23,8 @@ import {
   onSnapshot, 
   addDoc, 
   updateDoc, 
-  arrayUnion,
-  arrayRemove,
-  deleteField,
+  deleteDoc,
+  arrayUnion, 
   serverTimestamp,
   getDocs,
   limit,
@@ -47,7 +46,10 @@ import {
   Hand,
   User as UserIcon,
   Copy,
-  Check
+  Check,
+  Pencil,
+  Trash2,
+  UserMinus
 } from 'lucide-react';
 import { 
   format, 
@@ -71,10 +73,22 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const AVATAR_COLORS = [
-  'bg-stone-200', 'bg-stone-300', 'bg-stone-400',
-  'bg-zinc-200', 'bg-zinc-300', 'bg-zinc-400',
-  'bg-neutral-200', 'bg-neutral-300', 'bg-neutral-400',
-  'bg-slate-200', 'bg-slate-300', 'bg-slate-400',
+  'bg-stone-200',   // Warm gray
+  'bg-slate-200',   // Cool gray
+  'bg-amber-100',   // Soft Amber/Sand
+  'bg-orange-100',  // Soft Terracotta
+  'bg-red-100',     // Muted Blush
+  'bg-rose-100',    // Soft Rose
+  'bg-pink-100',    // Dusty Pink
+  'bg-purple-100',  // Soft Lavender
+  'bg-indigo-100',  // Muted Denim
+  'bg-blue-100',    // Soft Blue
+  'bg-sky-100',     // Soft Sky
+  'bg-teal-100',    // Muted Seafoam
+  'bg-emerald-100', // Muted Sage Green
+  'bg-green-100',   // Light Moss
+  'bg-lime-100',    // Pale Lime
+  'bg-yellow-100',  // Warm Straw/Yellow
 ];
 
 const REACTIONS = [
@@ -92,33 +106,6 @@ interface UserProfile {
   avatarColor: string;
   initials: string;
   groupId?: string;
-  groupIds?: string[];
-}
-
-function normalizeMembership(profile: UserProfile): UserProfile {
-  const ids = profile.groupIds?.length
-    ? profile.groupIds
-    : profile.groupId
-      ? [profile.groupId]
-      : [];
-  const active =
-    profile.groupId && ids.includes(profile.groupId)
-      ? profile.groupId
-      : ids[0];
-  return {
-    ...profile,
-    groupIds: ids,
-    groupId: active,
-  };
-}
-
-function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
 }
 
 interface Group {
@@ -255,7 +242,6 @@ function AppContent() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'calendar' | 'prayers' | 'settings'>('calendar');
 
@@ -268,17 +254,9 @@ function AppContent() {
         try {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            let existing = normalizeMembership(docSnap.data() as UserProfile);
-            const needsMigrate =
-              !docSnap.data().groupIds?.length && Boolean(docSnap.data().groupId);
-            if (needsMigrate) {
-              await updateDoc(docRef, {
-                groupIds: existing.groupIds,
-                groupId: existing.groupId,
-              });
-            }
-            setProfile(existing);
+            setProfile(docSnap.data() as UserProfile);
           } else {
+            // Initial profile creation
             const initials = u.displayName ? u.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : u.email?.[0].toUpperCase() || 'U';
             const newProfile: UserProfile = {
               uid: u.uid,
@@ -286,7 +264,6 @@ function AppContent() {
               email: u.email || '',
               avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
               initials: initials.slice(0, 2),
-              groupIds: [],
             };
             await setDoc(docRef, newProfile);
             setProfile(newProfile);
@@ -297,25 +274,13 @@ function AppContent() {
       } else {
         setProfile(null);
         setGroup(null);
-        setGroups([]);
       }
       setLoading(false);
     });
     return unsubscribe;
   }, []);
 
-  // Live profile updates
-  useEffect(() => {
-    if (!user?.uid) return;
-    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-      if (snap.exists()) {
-        setProfile(normalizeMembership(snap.data() as UserProfile));
-      }
-    });
-    return unsubscribe;
-  }, [user?.uid]);
-
-  // Active group listener
+  // Group Listener
   useEffect(() => {
     if (profile?.groupId) {
       const unsubscribe = onSnapshot(doc(db, 'groups', profile.groupId), (docSnap) => {
@@ -333,29 +298,6 @@ function AppContent() {
     }
   }, [profile?.groupId]);
 
-  // All memberships
-  useEffect(() => {
-    const ids = profile?.groupIds ?? [];
-    if (ids.length === 0) {
-      setGroups([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const loaded: Group[] = [];
-      for (const id of ids) {
-        const snap = await getDoc(doc(db, 'groups', id));
-        if (snap.exists()) {
-          loaded.push({ id: snap.id, ...snap.data() } as Group);
-        }
-      }
-      if (!cancelled) setGroups(loaded);
-    })().catch(console.error);
-    return () => {
-      cancelled = true;
-    };
-  }, [profile?.groupIds?.join(',')]);
-
   // Connection Test
   useEffect(() => {
     async function testConnection() {
@@ -370,83 +312,6 @@ function AppContent() {
     testConnection();
   }, []);
 
-  const switchGroup = useCallback(async (groupId: string) => {
-    if (!profile) return;
-    if (!(profile.groupIds ?? []).includes(groupId)) {
-      throw new Error('You are not a member of that group.');
-    }
-    await updateDoc(doc(db, 'users', profile.uid), { groupId });
-  }, [profile]);
-
-  const joinGroup = useCallback(async (inviteCode: string) => {
-    if (!profile) return;
-    const q = query(
-      collection(db, 'groups'),
-      where('inviteCode', '==', inviteCode.trim().toUpperCase()),
-      limit(1)
-    );
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) {
-      throw new Error('Invalid invite code');
-    }
-    const groupDoc = querySnapshot.docs[0];
-    const groupData = groupDoc.data();
-    if (groupData.memberUids.includes(profile.uid)) {
-      await updateDoc(doc(db, 'users', profile.uid), {
-        groupId: groupDoc.id,
-        groupIds: arrayUnion(groupDoc.id),
-      });
-      return;
-    }
-    if (groupData.memberUids.length >= 5) {
-      throw new Error('Group is full');
-    }
-    await updateDoc(doc(db, 'groups', groupDoc.id), {
-      memberUids: arrayUnion(profile.uid),
-    });
-    await updateDoc(doc(db, 'users', profile.uid), {
-      groupId: groupDoc.id,
-      groupIds: arrayUnion(groupDoc.id),
-    });
-  }, [profile]);
-
-  const createGroup = useCallback(async (name: string) => {
-    if (!profile || !name.trim()) return;
-    const groupRef = await addDoc(collection(db, 'groups'), {
-      name: name.trim(),
-      inviteCode: generateInviteCode(),
-      memberUids: [profile.uid],
-      createdAt: serverTimestamp(),
-    });
-    await updateDoc(doc(db, 'users', profile.uid), {
-      groupId: groupRef.id,
-      groupIds: arrayUnion(groupRef.id),
-    });
-  }, [profile]);
-
-  const leaveGroup = useCallback(async (groupId: string) => {
-    if (!profile) return;
-    const remaining = (profile.groupIds ?? []).filter((id) => id !== groupId);
-    const nextActive =
-      profile.groupId === groupId ? remaining[0] ?? null : profile.groupId ?? null;
-
-    // Update profile first so listeners drop this groupId before memberUids changes.
-    const userUpdate: Record<string, unknown> = { groupIds: remaining };
-    if (nextActive) {
-      userUpdate.groupId = nextActive;
-    } else {
-      userUpdate.groupId = deleteField();
-    }
-    if (profile.groupId === groupId) {
-      setGroup(null);
-    }
-    await updateDoc(doc(db, 'users', profile.uid), userUpdate);
-
-    await updateDoc(doc(db, 'groups', groupId), {
-      memberUids: arrayRemove(profile.uid),
-    });
-  }, [profile]);
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-50">
@@ -459,24 +324,16 @@ function AppContent() {
     return <AuthScreen />;
   }
 
-  const hasGroups = Boolean(profile?.groupIds?.length || profile?.groupId);
-
-  if (!hasGroups) {
-    return (
-      <OnboardingScreen
-        profile={profile}
-        onJoin={joinGroup}
-        onCreate={createGroup}
-      />
-    );
+  if (!profile?.groupId) {
+    return <OnboardingScreen profile={profile} />;
   }
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-stone-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-stone-600", profile!.avatarColor)}>
-            {profile!.initials}
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-stone-600", profile.avatarColor)}>
+            {profile.initials}
           </div>
           <h1 className="text-lg font-semibold tracking-tight">Gathered</h1>
         </div>
@@ -514,17 +371,7 @@ function AppContent() {
             >
               {view === 'calendar' && <CalendarView group={group} profile={profile!} />}
               {view === 'prayers' && <PrayerView group={group} profile={profile!} />}
-              {view === 'settings' && (
-                <SettingsView
-                  profile={profile!}
-                  group={group}
-                  groups={groups}
-                  onSwitchGroup={switchGroup}
-                  onJoinGroup={joinGroup}
-                  onCreateGroup={createGroup}
-                  onLeaveGroup={leaveGroup}
-                />
-              )}
+              {view === 'settings' && <SettingsView profile={profile!} group={group} />}
             </motion.div>
           ) : (
             <div className="min-h-[50vh] flex items-center justify-center">
@@ -633,44 +480,57 @@ function AuthScreen() {
 }
 
 // --- Onboarding Screen ---
-function OnboardingScreen({
-  profile,
-  onJoin,
-  onCreate,
-}: {
-  profile: UserProfile | null;
-  onJoin: (inviteCode: string) => Promise<void>;
-  onCreate: (name: string) => Promise<void>;
-}) {
+function OnboardingScreen({ profile }: { profile: UserProfile | null }) {
   const [inviteCode, setInviteCode] = useState('');
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'choice' | 'join' | 'create'>('choice');
-  const [busy, setBusy] = useState(false);
 
   const handleJoin = async () => {
-    if (!profile || !inviteCode.trim()) return;
     setError('');
-    setBusy(true);
     try {
-      await onJoin(inviteCode);
+      const q = query(collection(db, 'groups'), where('inviteCode', '==', inviteCode.toUpperCase()), limit(1));
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) {
+        setError('Invalid invite code');
+        return;
+      }
+      const groupDoc = querySnapshot.docs[0];
+      const groupData = groupDoc.data();
+      if (groupData.memberUids.length >= 5) {
+        setError('Group is full');
+        return;
+      }
+      await updateDoc(doc(db, 'groups', groupDoc.id), {
+        memberUids: arrayUnion(profile!.uid)
+      });
+      await updateDoc(doc(db, 'users', profile!.uid), {
+        groupId: groupDoc.id
+      });
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : 'Failed to join');
-    } finally {
-      setBusy(false);
+      handleFirestoreError(err, OperationType.UPDATE, `groups/${inviteCode}`);
     }
   };
 
   const handleCreate = async () => {
-    if (!profile || !groupName.trim()) return;
     setError('');
-    setBusy(true);
     try {
-      await onCreate(groupName);
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 for clarity
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      const groupRef = await addDoc(collection(db, 'groups'), {
+        name: groupName,
+        inviteCode: code,
+        memberUids: [profile!.uid],
+        createdAt: serverTimestamp()
+      });
+      await updateDoc(doc(db, 'users', profile!.uid), {
+        groupId: groupRef.id
+      });
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : 'Failed to create');
-    } finally {
-      setBusy(false);
+      handleFirestoreError(err, OperationType.WRITE, 'groups/users');
     }
   };
 
@@ -723,10 +583,9 @@ function OnboardingScreen({
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <button 
                 onClick={handleJoin}
-                disabled={busy}
-                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors disabled:opacity-50"
+                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors"
               >
-                {busy ? 'Joining…' : 'Join Group'}
+                Join Group
               </button>
             </div>
           </div>
@@ -749,10 +608,9 @@ function OnboardingScreen({
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <button 
                 onClick={handleCreate}
-                disabled={busy}
-                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors disabled:opacity-50"
+                className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors"
               >
-                {busy ? 'Creating…' : 'Create Group'}
+                Create Group
               </button>
             </div>
           </div>
@@ -801,9 +659,10 @@ function CalendarView({ group, profile }: { group: Group, profile: UserProfile }
   }, [currentDate]);
 
   const getEntriesForDay = (day: Date) => {
-    return entries.filter((e) => {
-      const [y, m, d] = e.date.split('-').map(Number);
-      return isSameDay(new Date(y, m - 1, d), day);
+    return entries.filter(e => {
+      const [year, month, d] = e.date.split('-').map(Number);
+      const entryLocalDate = new Date(year, month - 1, d);
+      return isSameDay(entryLocalDate, day);
     });
   };
 
@@ -975,6 +834,18 @@ function ReadingForm({ date, group, profile, onClose }: { date: Date, group: Gro
 }
 
 function ReadingCard({ entry, member, profile }: { entry: ReadingEntry, member: UserProfile, profile: UserProfile, key?: string }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedScripture, setEditedScripture] = useState(entry.scripture);
+  const [editedThoughts, setEditedThoughts] = useState(entry.thoughts);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  // Sync edits if original changes from DB
+  useEffect(() => {
+    setEditedScripture(entry.scripture);
+    setEditedThoughts(entry.thoughts);
+  }, [entry.scripture, entry.thoughts]);
+
   const handleReaction = async (emoji: string) => {
     const reactions = { ...entry.reactions };
     if (!reactions[emoji]) reactions[emoji] = [];
@@ -988,13 +859,128 @@ function ReadingCard({ entry, member, profile }: { entry: ReadingEntry, member: 
     await updateDoc(doc(db, 'readings', entry.id), { reactions }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `readings/${entry.id}`));
   };
 
-  return (
-    <div className="border-b border-stone-100 last:border-0 pb-4 last:pb-0">
-      <div className="flex items-center gap-2 mb-2">
-        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-stone-600", member?.avatarColor)}>
-          {member?.initials}
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUpdating(true);
+    try {
+      await updateDoc(doc(db, 'readings', entry.id), {
+        scripture: editedScripture,
+        thoughts: editedThoughts
+      });
+      setIsEditing(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `readings/${entry.id}`);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteDoc(doc(db, 'readings', entry.id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `readings/${entry.id}`);
+    }
+  };
+
+  if (confirmDelete) {
+    return (
+      <div className="bg-red-50/50 p-4 rounded-xl border border-red-100 flex flex-col gap-3 my-2 text-left">
+        <p className="text-xs font-semibold text-red-800">Delete this entry? This action cannot be undone.</p>
+        <div className="flex gap-2">
+          <button 
+            type="button"
+            onClick={handleDelete}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            Yes, delete
+          </button>
+          <button 
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-xs font-medium transition-colors"
+          >
+            Cancel
+          </button>
         </div>
-        <span className="text-sm font-bold text-stone-900">{member?.displayName}</span>
+      </div>
+    );
+  }
+
+  if (isEditing) {
+    return (
+      <form onSubmit={handleUpdate} className="space-y-3 pt-2 text-left border-b border-stone-100 pb-4">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Scripture Reading</label>
+          <input 
+            type="text" 
+            value={editedScripture}
+            onChange={(e) => setEditedScripture(e.target.value)}
+            className="w-full px-3 py-1.5 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-200"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Thoughts / Summary</label>
+          <textarea 
+            rows={3}
+            value={editedThoughts}
+            onChange={(e) => setEditedThoughts(e.target.value)}
+            className="w-full px-3 py-1.5 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-200 resize-none"
+          />
+        </div>
+        <div className="flex gap-2 text-xs">
+          <button 
+            type="submit" 
+            disabled={updating}
+            className="px-3 py-1.5 bg-stone-900 text-white rounded-lg font-medium hover:bg-stone-800 disabled:opacity-50 transition-colors"
+          >
+            {updating ? 'Saving...' : 'Save'}
+          </button>
+          <button 
+            type="button" 
+            onClick={() => {
+              setIsEditing(false);
+              setEditedScripture(entry.scripture);
+              setEditedThoughts(entry.thoughts);
+            }}
+            className="px-3 py-1.5 bg-stone-100 text-stone-600 rounded-lg font-medium hover:bg-stone-200 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="border-b border-stone-100 last:border-0 pb-4 last:pb-0 text-left">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-stone-600", member?.avatarColor)}>
+            {member?.initials}
+          </div>
+          <span className="text-sm font-bold text-stone-900">{member?.displayName}</span>
+        </div>
+
+        {entry.uid === profile.uid && (
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="p-1 hover:bg-stone-50 rounded text-stone-400 hover:text-stone-600 transition-colors"
+              title="Edit entry"
+            >
+              <Pencil size={13} />
+            </button>
+            <button 
+              onClick={() => setConfirmDelete(true)}
+              className="p-1 hover:bg-red-50 rounded text-stone-400 hover:text-red-500 transition-colors"
+              title="Delete entry"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )}
       </div>
       <div className="pl-8">
         <p className="text-sm font-semibold text-stone-700 mb-1">{entry.scripture}</p>
@@ -1094,7 +1080,7 @@ function PrayerView({ group, profile }: { group: Group, profile: UserProfile }) 
           </div>
         ) : (
           prayers.map(prayer => (
-            <PrayerCard key={prayer.id} prayer={prayer} member={members[prayer.uid]} members={members} profile={profile} />
+            <PrayerCard key={prayer.id} prayer={prayer} member={members[prayer.uid]} profile={profile} />
           ))
         )}
       </div>
@@ -1174,9 +1160,20 @@ function PrayerForm({ group, profile, onClose }: { group: Group, profile: UserPr
   );
 }
 
-function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerRequest, member: UserProfile, members: Record<string, UserProfile>, profile: UserProfile, key?: string }) {
+function PrayerCard({ prayer, member, profile }: { prayer: PrayerRequest, member: UserProfile, profile: UserProfile, key?: string }) {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(prayer.content);
+  const [editedType, setEditedType] = useState(prayer.type);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  // Sync edits if original changes from DB
+  useEffect(() => {
+    setEditedContent(prayer.content);
+    setEditedType(prayer.type);
+  }, [prayer.content, prayer.type]);
 
   const handleReaction = async (emoji: string) => {
     const reactions = { ...prayer.reactions };
@@ -1191,6 +1188,30 @@ function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerReques
     await updateDoc(doc(db, 'prayers', prayer.id), { reactions }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `prayers/${prayer.id}`));
   };
 
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUpdating(true);
+    try {
+      await updateDoc(doc(db, 'prayers', prayer.id), {
+        content: editedContent,
+        type: editedType
+      });
+      setIsEditing(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `prayers/${prayer.id}`);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteDoc(doc(db, 'prayers', prayer.id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `prayers/${prayer.id}`);
+    }
+  };
+
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteText.trim()) return;
@@ -1199,17 +1220,89 @@ function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerReques
       notes: arrayUnion({
         uid: profile.uid,
         text: noteText,
-        createdAt: new Date().toISOString(),
-        authorName: profile.displayName,
-        authorInitials: profile.initials,
+        createdAt: new Date().toISOString()
       })
     }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `prayers/${prayer.id}`));
     setNoteText('');
     setShowNoteForm(false);
   };
 
+  if (confirmDelete) {
+    return (
+      <div className="bg-red-50/50 p-6 rounded-2xl border border-red-100 flex flex-col gap-3 my-2 text-left">
+        <p className="text-sm font-semibold text-red-800">Delete this entry? This action cannot be undone.</p>
+        <div className="flex gap-2">
+          <button 
+            type="button"
+            onClick={handleDelete}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-medium transition-colors"
+          >
+            Yes, delete
+          </button>
+          <button 
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-xl text-xs font-medium transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isEditing) {
+    return (
+      <form onSubmit={handleUpdate} className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4 text-left">
+        <div className="flex gap-2">
+          <button 
+            type="button"
+            onClick={() => setEditedType('request')}
+            className={cn("flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors", editedType === 'request' ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-400")}
+          >
+            Prayer Request
+          </button>
+          <button 
+            type="button"
+            onClick={() => setEditedType('praise')}
+            className={cn("flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors", editedType === 'praise' ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-400")}
+          >
+            Praise Report
+          </button>
+        </div>
+        <textarea 
+          rows={3}
+          value={editedContent}
+          onChange={(e) => setEditedContent(e.target.value)}
+          className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-stone-200 resize-none"
+          required
+        />
+        <div className="flex gap-2 text-xs">
+          <button 
+            type="submit" 
+            disabled={updating}
+            className="px-4 py-2 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-50 transition-colors"
+          >
+            {updating ? 'Saving...' : 'Save'}
+          </button>
+          <button 
+            type="button" 
+            onClick={() => {
+              setIsEditing(false);
+              setEditedContent(prayer.content);
+              setEditedType(prayer.type);
+            }}
+            className="px-4 py-2 bg-stone-100 text-stone-600 rounded-xl font-medium hover:bg-stone-200 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   return (
-    <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+    <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4 text-left">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-stone-600", member?.avatarColor)}>
@@ -1222,15 +1315,36 @@ function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerReques
             </p>
           </div>
         </div>
-        <span className={cn(
-          "px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest",
-          prayer.type === 'request' ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
-        )}>
-          {prayer.type}
-        </span>
+
+        <div className="flex items-center gap-2">
+          {prayer.uid === profile.uid && (
+            <div className="flex items-center gap-1 mr-1">
+              <button 
+                onClick={() => setIsEditing(true)}
+                className="p-1 hover:bg-stone-50 rounded text-stone-400 hover:text-stone-600 transition-colors"
+                title="Edit card"
+              >
+                <Pencil size={13} />
+              </button>
+              <button 
+                onClick={() => setConfirmDelete(true)}
+                className="p-1 hover:bg-red-50 rounded text-stone-400 hover:text-red-500 transition-colors"
+                title="Delete card"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )}
+          <span className={cn(
+            "px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest",
+            prayer.type === 'request' ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+          )}>
+            {prayer.type}
+          </span>
+        </div>
       </div>
 
-      <p className="text-stone-700 leading-relaxed">{prayer.content}</p>
+      <p className="text-stone-700 leading-relaxed whitespace-pre-wrap">{prayer.content}</p>
 
       <div className="flex flex-wrap gap-2 pt-2">
         {REACTIONS.map(({ label }) => {
@@ -1275,32 +1389,13 @@ function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerReques
 
       {prayer.notes.length > 0 && (
         <div className="space-y-3 pt-4 border-t border-stone-50">
-          {prayer.notes.map((note, index) => {
-            const noteAuthor = members[note.uid];
-            const authorName = note.authorName ?? noteAuthor?.displayName ?? 'Unknown';
-            const authorInitials = note.authorInitials ?? noteAuthor?.initials ?? '?';
-            const isOwnNote = note.uid === profile.uid;
-            return (
-              <div key={`${note.uid}-${note.createdAt}-${index}`} className="flex gap-2">
-                <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-stone-600 shrink-0", noteAuthor?.avatarColor)}>
-                  {authorInitials}
-                </div>
-                <div className="flex-1 bg-stone-50 p-3 rounded-xl border border-stone-100">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-bold text-stone-900">{authorName}</p>
-                    {isOwnNote && (
-                      <span className="text-[10px] font-bold text-stone-500 bg-stone-200 px-1.5 py-0.5 rounded">You</span>
-                    )}
-                    <span className="text-stone-300">·</span>
-                    <p className="text-[11px] text-stone-400">
-                      {note.createdAt ? format(new Date(note.createdAt), 'MMM d, h:mm a') : ''}
-                    </p>
-                  </div>
-                  <p className="text-sm text-stone-600 leading-relaxed mt-1.5">{note.text}</p>
-                </div>
+          {prayer.notes.map((note, idx) => (
+            <div key={idx} className="flex gap-2">
+              <div className="flex-1 bg-stone-50 p-3 rounded-xl">
+                <p className="text-xs text-stone-600 leading-relaxed">{note.text}</p>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1308,33 +1403,38 @@ function PrayerCard({ prayer, member, members, profile }: { prayer: PrayerReques
 }
 
 // --- Settings View ---
-function SettingsView({
-  profile,
-  group,
-  groups,
-  onSwitchGroup,
-  onJoinGroup,
-  onCreateGroup,
-  onLeaveGroup,
-}: {
-  profile: UserProfile;
-  group: Group;
-  groups: Group[];
-  onSwitchGroup: (groupId: string) => Promise<void>;
-  onJoinGroup: (inviteCode: string) => Promise<void>;
-  onCreateGroup: (name: string) => Promise<void>;
-  onLeaveGroup: (groupId: string) => Promise<void>;
-}) {
+function SettingsView({ profile, group }: { profile: UserProfile, group: Group }) {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [avatarColor, setAvatarColor] = useState(profile.avatarColor);
   const [initials, setInitials] = useState(profile.initials);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [groupAction, setGroupAction] = useState<'idle' | 'join' | 'create'>('idle');
-  const [inviteCode, setInviteCode] = useState('');
-  const [newGroupName, setNewGroupName] = useState('');
-  const [groupError, setGroupError] = useState('');
-  const [groupBusy, setGroupBusy] = useState(false);
+
+  // States for viewing group members
+  const [members, setMembers] = useState<Record<string, UserProfile>>({});
+  
+  // States for leaving group
+  const [leaving, setLeaving] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  // Fetch all group members on load or change
+  useEffect(() => {
+    const fetchMembers = async () => {
+      const memberData: Record<string, UserProfile> = {};
+      for (const uid of group.memberUids) {
+        try {
+          const docSnap = await getDoc(doc(db, 'users', uid));
+          if (docSnap.exists()) {
+            memberData[uid] = docSnap.data() as UserProfile;
+          }
+        } catch (err) {
+          console.error(`Error fetching member profile for ${uid}:`, err);
+        }
+      }
+      setMembers(memberData);
+    };
+    fetchMembers();
+  }, [group.memberUids]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1357,31 +1457,27 @@ function SettingsView({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleJoinAnother = async () => {
-    setGroupError('');
-    setGroupBusy(true);
+  const handleLeaveGroup = async () => {
+    setLeaving(true);
     try {
-      await onJoinGroup(inviteCode);
-      setInviteCode('');
-      setGroupAction('idle');
+      if (group.memberUids.length === 1) {
+        // Last member deletes the group
+        await deleteDoc(doc(db, 'groups', group.id));
+      } else {
+        // Otherwise remove self from list of members
+        await updateDoc(doc(db, 'groups', group.id), {
+          memberUids: group.memberUids.filter(uid => uid !== profile.uid)
+        });
+      }
+      // Update self profile to have no groupId
+      await updateDoc(doc(db, 'users', profile.uid), {
+        groupId: ""
+      });
     } catch (err) {
-      setGroupError(err instanceof Error ? err.message : 'Failed to join');
+      handleFirestoreError(err, OperationType.UPDATE, `groups/${group.id}`);
     } finally {
-      setGroupBusy(false);
-    }
-  };
-
-  const handleCreateAnother = async () => {
-    setGroupError('');
-    setGroupBusy(true);
-    try {
-      await onCreateGroup(newGroupName);
-      setNewGroupName('');
-      setGroupAction('idle');
-    } catch (err) {
-      setGroupError(err instanceof Error ? err.message : 'Failed to create');
-    } finally {
-      setGroupBusy(false);
+      setLeaving(false);
+      setConfirmLeave(false);
     }
   };
 
@@ -1441,57 +1537,41 @@ function SettingsView({
       </section>
 
       <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
-        <h3 className="text-lg font-bold text-stone-900">Your Groups</h3>
-        <p className="text-sm text-stone-500">Click a group to make it active for calendar and prayers.</p>
+        <h3 className="text-lg font-bold text-stone-900">Group Info</h3>
+        <div className="p-4 bg-stone-50 rounded-xl border border-stone-100">
+          <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Group Name</p>
+          <p className="text-stone-900 font-semibold">{group.name}</p>
+        </div>
 
-        <div className="space-y-2">
-          {groups.map((g) => {
-            const active = g.id === group.id;
-            return (
-              <div
-                key={g.id}
-                className={cn(
-                  'flex items-center gap-3 p-3 rounded-xl border',
-                  active ? 'border-stone-300 bg-stone-50' : 'border-stone-100'
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!active) onSwitchGroup(g.id).catch(console.error);
-                  }}
-                  className="flex-1 text-left"
-                >
-                  <p className="font-semibold text-stone-900">{g.name}</p>
-                  <p className="text-xs text-stone-500">
-                    {g.memberUids.length} {g.memberUids.length === 1 ? 'member' : 'members'}
-                    {active ? ' · Active' : ''}
-                  </p>
-                </button>
-                {active && <Check size={18} className="text-emerald-600" />}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Leave “${g.name}”? You can rejoin later with an invite code.`)) {
-                      onLeaveGroup(g.id).catch((err) =>
-                        alert(err instanceof Error ? err.message : 'Failed to leave')
-                      );
-                    }
-                  }}
-                  className="text-sm font-medium text-red-500 hover:text-red-600 px-2"
-                >
-                  Leave
-                </button>
-              </div>
-            );
-          })}
+        {/* Group members list */}
+        <div className="p-4 bg-stone-50 rounded-xl border border-stone-100">
+          <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-3">Group Members ({group.memberUids.length}/5)</p>
+          <div className="space-y-3">
+            {group.memberUids.map(uid => {
+              const member = members[uid];
+              return (
+                <div key={uid} className="flex items-center gap-3">
+                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-stone-600", member?.avatarColor || 'bg-stone-200')}>
+                    {member?.initials || '??'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-stone-900 truncate">
+                      {member?.displayName || 'Loading...'} {uid === profile.uid && <span className="text-xs font-normal text-stone-400">(You)</span>}
+                    </p>
+                    {uid === profile.uid && member?.email && (
+                      <p className="text-xs text-stone-400 truncate">{member?.email}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="p-4 bg-stone-50 rounded-xl border border-stone-100 flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Active invite code</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Invite Code</p>
             <p className="text-stone-900 font-mono font-bold text-lg">{group.inviteCode}</p>
-            <p className="text-xs text-stone-400 mt-1">Share to invite friends to {group.name}</p>
           </div>
           <button 
             onClick={copyInviteCode}
@@ -1500,79 +1580,42 @@ function SettingsView({
             {copied ? <Check size={20} className="text-emerald-500" /> : <Copy size={20} />}
           </button>
         </div>
+      </section>
 
-        {groupAction === 'idle' && (
-          <div className="grid gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setGroupError('');
-                setGroupAction('join');
-              }}
-              className="w-full py-3 border border-stone-200 rounded-xl font-medium text-stone-900 hover:bg-stone-50"
-            >
-              Join another group
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setGroupError('');
-                setGroupAction('create');
-              }}
-              className="w-full py-3 border border-stone-200 rounded-xl font-medium text-stone-900 hover:bg-stone-50"
-            >
-              Create another group
-            </button>
-          </div>
-        )}
-
-        {groupAction === 'join' && (
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Invite code"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              className="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl uppercase"
-            />
-            {groupError && <p className="text-red-500 text-xs">{groupError}</p>}
+      <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+        <h3 className="text-lg font-bold text-stone-900">Danger Zone</h3>
+        {!confirmLeave ? (
+          <button 
+            type="button"
+            onClick={() => setConfirmLeave(true)}
+            className="w-full py-3 bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <UserMinus size={20} />
+            Leave Group
+          </button>
+        ) : (
+          <div className="p-4 bg-red-50/50 rounded-xl border border-red-100 space-y-3">
+            <h4 className="text-sm font-bold text-red-800">Are you absolutely sure?</h4>
+            <p className="text-xs text-red-600 leading-relaxed">
+              If you leave this group, you will no longer have access to its reading entries, calendars, or prayers. 
+              {group.memberUids.length === 1 && " Since you are the last member, this group will be deleted."}
+            </p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setGroupAction('idle')} className="px-4 py-2 text-stone-500 font-medium">
-                Cancel
-              </button>
-              <button
+              <button 
                 type="button"
-                onClick={handleJoinAnother}
-                disabled={groupBusy || !inviteCode.trim()}
-                className="flex-1 py-2 bg-stone-900 text-white rounded-xl font-medium disabled:opacity-50"
+                onClick={handleLeaveGroup}
+                disabled={leaving}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
               >
-                {groupBusy ? 'Joining…' : 'Join'}
+                {leaving ? "Leaving..." : "Yes, Leave Group"}
               </button>
-            </div>
-          </div>
-        )}
-
-        {groupAction === 'create' && (
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Group name"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              className="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl"
-            />
-            {groupError && <p className="text-red-500 text-xs">{groupError}</p>}
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setGroupAction('idle')} className="px-4 py-2 text-stone-500 font-medium">
-                Cancel
-              </button>
-              <button
+              <button 
                 type="button"
-                onClick={handleCreateAnother}
-                disabled={groupBusy || !newGroupName.trim()}
-                className="flex-1 py-2 bg-stone-900 text-white rounded-xl font-medium disabled:opacity-50"
+                onClick={() => setConfirmLeave(false)}
+                disabled={leaving}
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
               >
-                {groupBusy ? 'Creating…' : 'Create'}
+                Cancel
               </button>
             </div>
           </div>
@@ -1581,7 +1624,7 @@ function SettingsView({
 
       <button 
         onClick={() => signOut(auth)}
-        className="w-full py-3 bg-white border border-red-100 text-red-500 rounded-xl font-medium hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3 bg-white border border-stone-200 text-stone-500 rounded-xl font-medium hover:bg-stone-50 transition-colors flex items-center justify-center gap-2"
       >
         <LogOut size={20} />
         Sign Out
