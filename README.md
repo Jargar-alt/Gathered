@@ -8,6 +8,8 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/8208d2b0-a74a-48ef-b802-330bc39f0036
 
+> **Important:** This GitHub repo (`Jargar-alt/Gathered`) is the source of truth for the **mobile app**, Firebase functions/rules, and privacy docs. Do **not** enable AI Studio “push to GitHub” / sync that overwrites `main` — a prior AI Studio sync deleted the entire `mobile/` tree. Treat AI Studio as a separate copy of the web UI only, or pull *from* GitHub into AI Studio—not the other way around.
+
 ## Run Locally
 
 **Prerequisites:**  Node.js
