@@ -38,7 +38,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'avatarColor', 'initials', 'groupId', 'groupIds', 'role', 'expoPushToken']) &&
+      return hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'avatarColor', 'initials', 'groupId', 'groupIds', 'role', 'expoPushToken', 'blockedUids', 'acceptedTermsAt']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 50 &&
              data.email is string && isValidEmail(data.email) &&
@@ -47,7 +47,19 @@ service cloud.firestore {
              (!('groupIds' in data) || (data.groupIds is list && data.groupIds.size() <= 20)) &&
              (!('photoURL' in data) || data.photoURL is string) &&
              (!('role' in data) || data.role in ['user', 'admin']) &&
-             (!('expoPushToken' in data) || data.expoPushToken is string);
+             (!('expoPushToken' in data) || data.expoPushToken is string) &&
+             (!('blockedUids' in data) || (data.blockedUids is list && data.blockedUids.size() <= 200)) &&
+             (!('acceptedTermsAt' in data) || data.acceptedTermsAt is string);
+    }
+
+    function isValidReport(data) {
+      return hasOnlyAllowedFields(['reporterUid', 'targetUid', 'groupId', 'contentType', 'contentId', 'reason', 'createdAt']) &&
+             data.reporterUid is string &&
+             data.targetUid is string &&
+             data.groupId is string &&
+             data.contentType in ['prayer', 'reading', 'note'] &&
+             data.contentId is string &&
+             data.reason is string && data.reason.size() > 0 && data.reason.size() <= 500;
     }
 
     function isValidGroup(data) {
@@ -82,6 +94,7 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user');
       allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
                        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     // Groups
@@ -121,6 +134,16 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isGroupMember(request.resource.data.groupId) && isValidPrayer(request.resource.data);
       allow update: if isGroupMember(resource.data.groupId) && isValidPrayer(request.resource.data);
       allow delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    // Safety reports (flag objectionable content)
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() &&
+        isValidReport(request.resource.data) &&
+        request.resource.data.reporterUid == request.auth.uid &&
+        isGroupMember(request.resource.data.groupId);
+      allow read: if isAuthenticated() &&
+        (resource.data.reporterUid == request.auth.uid || isAdmin());
     }
   }
 }

@@ -45,10 +45,10 @@
     "ios": "expo start --dev-client --ios",
     "web": "expo start --web",
     "lint": "tsc --noEmit",
-    "build:dev": "eas build --platform ios --profile development",
-    "build:dev:simulator": "eas build --platform ios --profile development-simulator",
-    "build:ios": "eas build --platform ios --profile production",
-    "build:ios:preview": "eas build --platform ios --profile preview",
+    "build:dev": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile development",
+    "build:dev:simulator": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile development-simulator",
+    "build:ios": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile production",
+    "build:ios:preview": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile preview",
     "submit:ios": "eas submit --platform ios --profile production"
   },
   "private": true

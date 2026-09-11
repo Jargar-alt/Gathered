@@ -101,7 +101,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 ...(u.displayName && docSnap.data().displayName !== u.displayName
                   ? { displayName: u.displayName }
                   : {}),
+                ...(!docSnap.data().acceptedTermsAt
+                  ? { acceptedTermsAt: new Date().toISOString() }
+                  : {}),
               });
+            } else if (!docSnap.data().acceptedTermsAt) {
+              await updateDoc(docRef, { acceptedTermsAt: new Date().toISOString() });
             }
             setProfile(existing);
           } else {
@@ -115,8 +120,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
               initials: initials.slice(0, 2),
               groupIds: [],
+              blockedUids: [],
+              acceptedTermsAt: new Date().toISOString(),
             };
-            await setDoc(docRef, newProfile);
+            await setDoc(docRef, newProfile, { merge: true });
             setProfile(newProfile);
           }
         } catch (error) {

@@ -10,13 +10,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { deleteAccount } from '@/lib/deleteAccount';
+import { getAuthErrorMessage } from '@/lib/authErrors';
+import { unblockUser } from '@/lib/moderation';
 import { AVATAR_COLORS, AVATAR_COLOR_MAP } from '@shared/constants';
+import { UserProfile } from '@shared/types';
 
 type GroupAction = 'idle' | 'join' | 'create';
 
@@ -41,6 +45,11 @@ export default function SettingsScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [groupError, setGroupError] = useState('');
   const [groupBusy, setGroupBusy] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [blockedProfiles, setBlockedProfiles] = useState<Record<string, UserProfile>>({});
 
   useEffect(() => {
     if (!profile) return;
@@ -48,6 +57,26 @@ export default function SettingsScreen() {
     setAvatarColor(profile.avatarColor);
     setInitials(profile.initials);
   }, [profile]);
+
+  useEffect(() => {
+    const ids = profile?.blockedUids ?? [];
+    if (!ids.length) {
+      setBlockedProfiles({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, UserProfile> = {};
+      for (const uid of ids) {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) next[uid] = snap.data() as UserProfile;
+      }
+      if (!cancelled) setBlockedProfiles(next);
+    })().catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.blockedUids?.join(',')]);
 
   if (!profile || !group) {
     return (
@@ -129,6 +158,36 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account permanently?',
+      'This removes your profile, your readings and prayers, and signs you out. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            setDeleteError('');
+            setDeletePassword('');
+            setShowDelete(true);
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await deleteAccount(deletePassword);
+    } catch (err) {
+      setDeleteError(getAuthErrorMessage(err));
+      setDeleting(false);
+    }
   };
 
   const previewProfile = { ...profile, displayName, avatarColor, initials };
@@ -353,10 +412,84 @@ export default function SettingsScreen() {
         )}
       </View>
 
-      <Pressable onPress={() => signOut(auth)} style={styles.signOutBtn}>
+      {(profile.blockedUids?.length ?? 0) > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Blocked users</Text>
+          <Text style={styles.sectionHint}>You won’t see their readings or prayers.</Text>
+          {profile.blockedUids!.map((uid) => (
+            <View key={uid} style={styles.blockedRow}>
+              <Text style={styles.blockedName} numberOfLines={1}>
+                {blockedProfiles[uid]?.displayName || 'Blocked member'}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  unblockUser(profile.uid, uid).catch((err) => {
+                    Alert.alert('Error', err instanceof Error ? err.message : 'Could not unblock');
+                  });
+                }}
+              >
+                <Text style={styles.unblockText}>Unblock</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Pressable onPress={() => signOut(auth)} style={styles.signOutBtn} disabled={deleting}>
         <Ionicons name="log-out-outline" size={18} color="#dc2626" />
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
+
+      <View style={styles.dangerSection}>
+        <Text style={styles.sectionLabel}>Account</Text>
+        {!showDelete ? (
+          <Pressable onPress={handleDeleteAccount} style={styles.deleteBtn} disabled={deleting}>
+            <Text style={styles.deleteBtnText}>Delete account</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.deleteForm}>
+            <Text style={styles.sectionHint}>
+              Enter your password to permanently delete your Gathered account.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Password"
+              placeholderTextColor="#a8a29e"
+              secureTextEntry
+              autoComplete="password"
+              textContentType="password"
+              editable={!deleting}
+            />
+            {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
+            <View style={styles.inlineActions}>
+              <Pressable
+                onPress={() => {
+                  setShowDelete(false);
+                  setDeletePassword('');
+                  setDeleteError('');
+                }}
+                style={styles.cancelBtn}
+                disabled={deleting}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmDeleteAccount}
+                style={[styles.deleteConfirmBtn, (!deletePassword || deleting) && styles.saveBtnDisabled]}
+                disabled={!deletePassword || deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Delete forever</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+      </View>
     </KeyboardScreen>
   );
 }
@@ -588,6 +721,14 @@ const styles = StyleSheet.create({
     color: '#78716c',
   },
   error: { color: '#ef4444', fontSize: 13 },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  blockedName: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1c1917', marginRight: 12 },
+  unblockText: { fontSize: 14, fontWeight: '600', color: '#78716c' },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -600,4 +741,30 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   signOutText: { color: '#dc2626', fontWeight: '600', fontSize: 15 },
+  dangerSection: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    gap: 12,
+  },
+  deleteBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  deleteBtnText: { color: '#dc2626', fontWeight: '600', fontSize: 15 },
+  deleteForm: { gap: 10 },
+  deleteConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: '#dc2626',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
 });

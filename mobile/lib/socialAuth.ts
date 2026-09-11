@@ -8,10 +8,21 @@ import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/goo
 import { auth } from '@/lib/firebase';
 import authConfig from '../auth.config';
 
+export { getAuthErrorMessage } from '@/lib/authErrors';
+
 type GoogleExtra = {
+  enableGoogleSignIn?: boolean;
   googleWebClientId?: string;
   googleIosClientId?: string;
 };
+
+function isGoogleEnabled(): boolean {
+  const extra = (Constants.expoConfig?.extra ?? {}) as GoogleExtra;
+  if (typeof extra.enableGoogleSignIn === 'boolean') {
+    return extra.enableGoogleSignIn;
+  }
+  return Boolean(authConfig.enableGoogleSignIn);
+}
 
 function getGoogleConfig(): { webClientId: string; iosClientId?: string } {
   const extra = (Constants.expoConfig?.extra ?? {}) as GoogleExtra;
@@ -46,10 +57,14 @@ function configureGoogleSignIn() {
 }
 
 export function isGoogleSignInAvailable(): boolean {
-  return Boolean(getGoogleConfig().webClientId);
+  return isGoogleEnabled() && Boolean(getGoogleConfig().webClientId);
 }
 
 export async function signInWithGoogle(): Promise<void> {
+  if (!isGoogleSignInAvailable()) {
+    throw new Error('Google Sign-In is not available in this build.');
+  }
+
   const { webClientId } = getGoogleConfig();
   if (!webClientId) {
     throw new Error(
@@ -74,39 +89,4 @@ export async function signInWithGoogle(): Promise<void> {
 
   const credential = GoogleAuthProvider.credential(idToken);
   await signInWithCredential(auth, credential);
-}
-
-export function getAuthErrorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = String((error as { code: string }).code);
-    if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') {
-      return 'Sign-in was cancelled.';
-    }
-  }
-
-  if (error instanceof Error) {
-    if (error.message.includes('auth/invalid-credential')) {
-      return 'Sign-in failed. Check that Google is enabled in Firebase Authentication.';
-    }
-    if (error.message.includes('auth/operation-not-allowed')) {
-      return 'This sign-in method is not enabled. Enable it in Firebase Authentication.';
-    }
-    if (error.message.includes('auth/account-exists-with-different-credential')) {
-      return 'An account already exists with this email using a different sign-in method.';
-    }
-    if (error.message.includes('auth/email-already-in-use')) {
-      return 'An account with this email already exists. Try signing in with your original method.';
-    }
-    if (error.message.includes('auth/wrong-password') || error.message.includes('auth/invalid-email')) {
-      return 'Invalid email or password.';
-    }
-    if (error.message.includes('auth/user-not-found')) {
-      return 'No account found with this email.';
-    }
-    if (error.message.includes('auth/weak-password')) {
-      return 'Password should be at least 6 characters.';
-    }
-    return error.message;
-  }
-  return 'Authentication failed. Please try again.';
 }

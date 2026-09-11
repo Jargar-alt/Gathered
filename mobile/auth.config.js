@@ -1,8 +1,8 @@
 /**
- * Google OAuth client IDs (public — safe to ship in the app).
- * Env vars override these when set (EAS eas.json env / .env.local).
+ * Auth / OAuth config.
  *
- * Prefix 1074128724577 = Gathered Firebase / Google Cloud project.
+ * Google Sign-In is OFF for App Store (guideline 4.8 rejection).
+ * Email/password only until Sign in with Apple is added alongside Google.
  */
 const DEFAULTS = {
   googleWebClientId:
@@ -14,6 +14,7 @@ const DEFAULTS = {
 };
 
 module.exports = {
+  enableGoogleSignIn: false,
   googleWebClientId:
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || DEFAULTS.googleWebClientId,
   googleIosClientId:

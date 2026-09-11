@@ -1,33 +1,21 @@
 # Authentication Setup (Mobile)
 
-Gathered supports **Google** and **email/password** via Firebase Authentication.
+## App Store — email / password only
 
-## 1. Firebase Console
+Apple rejected Google-only third-party login (guideline **4.8**). The iOS build is **email/password only**. `enableGoogleSignIn` is hardcoded `false` in `mobile/auth.config.js`. The Google native plugin is not included.
+
+Enable in Firebase Console:
 
 1. Open [Firebase Console](https://console.firebase.google.com/) → project `gen-lang-client-0346540522`
-2. Go to **Authentication** → **Sign-in method**
-3. Enable:
-   - **Email/Password**
-   - **Google**
+2. **Authentication** → **Sign-in method** → enable **Email/Password**
 
-### Google
-- Enable Google provider on **Gathered** (not another Firebase project)
-- Web client ID must start with `1074128724577-` (Gathered project number)
-- Create an **iOS** OAuth client in Google Cloud for bundle ID `com.acuratls.gathered`
-- App config lives in `mobile/auth.config.js` and `mobile/eas.json`
+## Guideline 1.2 (UGC)
 
-## 2. Rebuild required
+- Terms of Use must be accepted on login/sign-up: https://jargar-alt.github.io/Gathered/terms.html
+- Client-side content filter on new readings, prayers, and notes
+- Flag / Block on other members’ posts (`···`)
+- Reports stored in Firestore `reports`; `blockedUids` on the user profile
 
-Google Sign-In uses native modules and URL schemes. After changing OAuth client IDs:
+## Re-enabling Google later
 
-```bash
-cd mobile
-npm run build:dev        # test on device
-npm run build:ios        # App Store
-```
-
-Email/password works without OAuth env vars.
-
-## App Store note
-
-Apple guideline 4.8: if you offer a third-party login (Google), App Review often requires **Sign in with Apple** as an equivalent option. Re-add Apple before submit if Review asks for it.
+Add **Sign in with Apple** first, then flip Google back on and rebuild.

@@ -9,6 +9,9 @@ export interface UserProfile {
   /** All group memberships. */
   groupIds?: string[];
   expoPushToken?: string;
+  /** Users whose content should be hidden for this profile (Apple 1.2). */
+  blockedUids?: string[];
+  acceptedTermsAt?: string;
 }
 
 export interface Group {

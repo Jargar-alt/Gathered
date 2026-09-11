@@ -12,12 +12,15 @@ import { db } from '@/lib/firebase';
 import Avatar from '@/components/Avatar';
 import { PrayerRequest, UserProfile } from '@shared/types';
 import { REACTIONS } from '@shared/constants';
+import { assertAllowedContent } from '@/lib/contentFilter';
+import { openModerationMenu } from '@/lib/moderationMenu';
 
 interface PrayerCardProps {
   prayer: PrayerRequest;
   member?: UserProfile;
   members: Record<string, UserProfile>;
   profile: UserProfile;
+  onModerationChange?: () => void;
 }
 
 function formatNoteDate(createdAt: string) {
@@ -37,9 +40,10 @@ function getNoteAuthor(note: PrayerRequest['notes'][number], members: Record<str
   };
 }
 
-export default function PrayerCard({ prayer, member, members, profile }: PrayerCardProps) {
+export default function PrayerCard({ prayer, member, members, profile, onModerationChange }: PrayerCardProps) {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [noteError, setNoteError] = useState('');
 
   const handleReaction = async (emoji: string) => {
     const reactions = { ...prayer.reactions };
@@ -56,18 +60,23 @@ export default function PrayerCard({ prayer, member, members, profile }: PrayerC
 
   const handleAddNote = async () => {
     if (!noteText.trim()) return;
-
-    await updateDoc(doc(db, 'prayers', prayer.id), {
-      notes: arrayUnion({
-        uid: profile.uid,
-        text: noteText.trim(),
-        createdAt: new Date().toISOString(),
-        authorName: profile.displayName,
-        authorInitials: profile.initials,
-      }),
-    });
-    setNoteText('');
-    setShowNoteForm(false);
+    setNoteError('');
+    try {
+      assertAllowedContent(noteText);
+      await updateDoc(doc(db, 'prayers', prayer.id), {
+        notes: arrayUnion({
+          uid: profile.uid,
+          text: noteText.trim(),
+          createdAt: new Date().toISOString(),
+          authorName: profile.displayName,
+          authorInitials: profile.initials,
+        }),
+      });
+      setNoteText('');
+      setShowNoteForm(false);
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : 'Could not add note.');
+    }
   };
 
   const createdAtLabel = prayer.createdAt
@@ -99,6 +108,26 @@ export default function PrayerCard({ prayer, member, members, profile }: PrayerC
             {prayer.type}
           </Text>
         </View>
+        {prayer.uid !== profile.uid ? (
+          <Pressable
+            onPress={() =>
+              openModerationMenu({
+                contentType: 'prayer',
+                contentId: prayer.id,
+                targetUid: prayer.uid,
+                groupId: prayer.groupId,
+                reporterUid: profile.uid,
+                targetName: member?.displayName,
+                onBlocked: onModerationChange,
+                onReported: onModerationChange,
+              })
+            }
+            hitSlop={8}
+            style={styles.moreBtn}
+          >
+            <Text style={styles.moreBtnText}>···</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <Text style={styles.content}>{prayer.content}</Text>
@@ -140,6 +169,7 @@ export default function PrayerCard({ prayer, member, members, profile }: PrayerC
           </Pressable>
         </View>
       )}
+      {noteError ? <Text style={styles.noteError}>{noteError}</Text> : null}
 
       {prayer.notes.length > 0 && (
         <View style={styles.notesSection}>
@@ -231,6 +261,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  moreBtn: { paddingHorizontal: 6, paddingVertical: 2, marginLeft: 4 },
+  moreBtnText: { fontSize: 18, color: '#a8a29e', fontWeight: '700' },
   requestText: { color: '#b45309' },
   praiseText: { color: '#047857' },
   content: {
@@ -286,6 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  noteError: { color: '#ef4444', fontSize: 13 },
   notesSection: {
     borderTopWidth: 1,
     borderTopColor: '#f5f5f4',

@@ -37,6 +37,9 @@ import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { parseLocalDate } from '@/lib/dates';
 import { ReadingEntry, UserProfile } from '@shared/types';
 import { REACTIONS, AVATAR_COLOR_MAP } from '@shared/constants';
+import { assertAllowedContent } from '@/lib/contentFilter';
+import { getReportedContentIds } from '@/lib/moderation';
+import { openModerationMenu } from '@/lib/moderationMenu';
 
 export default function CalendarScreen() {
   const { profile, group } = useAuth();
@@ -45,6 +48,11 @@ export default function CalendarScreen() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [members, setMembers] = useState<Record<string, UserProfile>>({});
+  const [hiddenContentIds, setHiddenContentIds] = useState<Set<string>>(new Set());
+  const [moderationTick, setModerationTick] = useState(0);
+
+  const blocked = new Set(profile?.blockedUids ?? []);
+  const refreshModeration = () => setModerationTick((n) => n + 1);
 
   useEffect(() => {
     if (!group || !profile?.uid || !group.memberUids.includes(profile.uid)) {
@@ -76,7 +84,17 @@ export default function CalendarScreen() {
       setMembers(memberData);
     };
     fetchMembers();
-  }, [group?.memberUids, profile?.uid]);
+  }, [group?.memberUids, profile?.uid, moderationTick]);
+
+  useEffect(() => {
+    if (!profile?.uid) {
+      setHiddenContentIds(new Set());
+      return;
+    }
+    getReportedContentIds(profile.uid)
+      .then(setHiddenContentIds)
+      .catch(() => setHiddenContentIds(new Set()));
+  }, [profile?.uid, moderationTick]);
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentDate));
@@ -85,7 +103,12 @@ export default function CalendarScreen() {
   }, [currentDate]);
 
   const getEntriesForDay = (day: Date) =>
-    entries.filter((e) => isSameDay(parseLocalDate(e.date), day));
+    entries.filter(
+      (e) =>
+        isSameDay(parseLocalDate(e.date), day) &&
+        !blocked.has(e.uid) &&
+        !hiddenContentIds.has(e.id)
+    );
 
   if (!profile || !group) {
     return (
@@ -184,6 +207,7 @@ export default function CalendarScreen() {
                 entry={entry}
                 member={members[entry.uid]}
                 profile={profile}
+                onModerationChange={refreshModeration}
               />
             ))
           )}
@@ -207,21 +231,26 @@ function ReadingForm({
   const [scripture, setScripture] = useState('');
   const [thoughts, setThoughts] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     if (!scripture.trim()) return;
+    setError('');
     setSubmitting(true);
     try {
+      assertAllowedContent(scripture, thoughts);
       await addDoc(collection(db, 'readings'), {
         uid: profile.uid,
         groupId: group.id,
         date: format(date, 'yyyy-MM-dd'),
-        scripture,
-        thoughts,
+        scripture: scripture.trim(),
+        thoughts: thoughts.trim(),
         reactions: {},
         createdAt: serverTimestamp(),
       });
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save entry.');
     } finally {
       setSubmitting(false);
     }
@@ -244,6 +273,7 @@ function ReadingForm({
         onChangeText={setThoughts}
         multiline
       />
+      {error ? <Text style={styles.formError}>{error}</Text> : null}
       <View style={styles.formActions}>
         <Pressable onPress={handleSubmit} disabled={submitting} style={styles.formSubmit}>
           <Text style={styles.formSubmitText}>Save Entry</Text>
@@ -260,10 +290,12 @@ function ReadingCard({
   entry,
   member,
   profile,
+  onModerationChange,
 }: {
   entry: ReadingEntry;
   member?: UserProfile;
   profile: UserProfile;
+  onModerationChange?: () => void;
 }) {
   const handleReaction = async (emoji: string) => {
     const reactions = { ...entry.reactions };
@@ -281,6 +313,26 @@ function ReadingCard({
       <View style={styles.readingAuthor}>
         <Avatar profile={member} size="sm" />
         <Text style={styles.readingAuthorName}>{member?.displayName}</Text>
+        {entry.uid !== profile.uid ? (
+          <Pressable
+            onPress={() =>
+              openModerationMenu({
+                contentType: 'reading',
+                contentId: entry.id,
+                targetUid: entry.uid,
+                groupId: entry.groupId,
+                reporterUid: profile.uid,
+                targetName: member?.displayName,
+                onBlocked: onModerationChange,
+                onReported: onModerationChange,
+              })
+            }
+            hitSlop={8}
+            style={styles.moreBtn}
+          >
+            <Text style={styles.moreBtnText}>···</Text>
+          </Pressable>
+        ) : null}
       </View>
       <Text style={styles.scripture}>{entry.scripture}</Text>
       <Text style={styles.thoughts}>{entry.thoughts}</Text>
@@ -383,6 +435,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   formTextarea: { minHeight: 80, textAlignVertical: 'top' },
+  formError: { color: '#ef4444', fontSize: 13 },
   formActions: { flexDirection: 'row', gap: 8 },
   formSubmit: {
     flex: 1,
@@ -407,7 +460,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   readingAuthor: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  readingAuthorName: { fontSize: 14, fontWeight: '700', color: '#1c1917' },
+  readingAuthorName: { fontSize: 14, fontWeight: '700', color: '#1c1917', flex: 1 },
+  moreBtn: { paddingHorizontal: 4 },
+  moreBtnText: { fontSize: 18, color: '#a8a29e', fontWeight: '700' },
   scripture: { fontSize: 14, fontWeight: '600', color: '#44403c', marginBottom: 4 },
   thoughts: { fontSize: 14, color: '#78716c', lineHeight: 20, marginBottom: 12 },
   reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
