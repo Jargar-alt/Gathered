@@ -5,7 +5,7 @@
 **Team:** JACK RILEY GARBER (`P9V25CHLW2`)  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 
-> Do **not** submit production build #2 (July) — it predates Google OAuth, multi-group, and UX fixes. Use a new `production` EAS build from current `main`.
+> Build from a branch that includes: email-only auth, password reset, account deletion, logo, and `EXPO_NO_CAPABILITY_SYNC`. Do **not** submit older production builds.
 
 ---
 
@@ -35,7 +35,7 @@ Record scripture references and short reflections. See who in your group showed 
 Post requests or praise reports, react with emoji, and add notes so encouragement stays attached to the prayer.
 
 **Private by design**
-Your group’s readings and prayers are only visible to members. Sign in with email or Google. Push notifications are optional.
+Your group’s readings and prayers are only visible to members. Sign in with email and password. Push notifications are optional.
 
 Gathered is for the quiet work of showing up—for Scripture, for prayer, and for one another.
 
@@ -43,8 +43,7 @@ Gathered is for the quiet work of showing up—for Scripture, for prayer, and fo
 bible,prayer,small group,accountability,scripture,faith,reading,church,devotional,praise
 
 ### Support URL
-mailto:jrgarber4@gmail.com  
-(or a simple support page if you prefer)
+mailto:jrgarber4@gmail.com
 
 ### Marketing URL (optional)
 https://ai.studio/apps/8208d2b0-a74a-48ef-b802-330bc39f0036
@@ -52,11 +51,12 @@ https://ai.studio/apps/8208d2b0-a74a-48ef-b802-330bc39f0036
 ### Privacy Policy URL
 https://jargar-alt.github.io/Gathered/privacy.html
 
+### Terms of Use URL
+https://jargar-alt.github.io/Gathered/terms.html
+
 ---
 
 ## Age rating / App Privacy (nutrition labels)
-
-Typical answers for Gathered:
 
 | Data | Collected | Linked to user | Used for tracking |
 |------|-----------|----------------|-------------------|
@@ -76,32 +76,31 @@ Encryption: export compliance already set (`ITSAppUsesNonExemptEncryption: false
 ```
 Gathered is a private small-group Bible reading and prayer app.
 
+This build addresses 4.8 and 1.2:
+- Sign-in is email/password only. There is no Google or other third-party login.
+- Users must accept Terms of Use (EULA) on the login/sign-up screen before Sign In or Create Account. Terms state zero tolerance for objectionable content and abusive users: https://jargar-alt.github.io/Gathered/terms.html
+- New posts are filtered for common objectionable language.
+- On any other member’s reading or prayer, tap ··· to Flag content or Block user. Flagged posts are hidden for the reporter. Blocked users’ content is hidden. Unblock is in Settings.
+
 Demo account:
 Email: [CREATE AND PASTE]
 Password: [CREATE AND PASTE]
 
 How to test:
-1. Sign in with the demo account (email/password).
-2. You will already be in a demo group, or create/join with invite code.
-3. Calendar → pick today → Record Reading.
-4. Prayers → New Entry → post a request; add a note.
-5. Settings → Your groups → switch / create another group if desired.
+1. On login, open Terms of Use, check the agreement box, then sign in.
+2. Calendar / Prayers: open another member’s post → ··· → Flag content or Block user.
+3. Settings → Blocked users to unblock.
 
-Sign-in options: Email/password and Google.
-Privacy policy: https://jargar-alt.github.io/Gathered/privacy.html
+Screen recording of Terms + Flag + Block is attached in App Review Information notes.
 ```
 
 ---
 
-## Guideline 4.8 (important)
+## Auth for v1.0
 
-The app offers **Google** as a third-party login. Apple often requires **Sign in with Apple** as an equivalent option.
+**Email/password only.** Google Sign-In is disabled (`enableGoogleSignIn: false` in `mobile/auth.config.js`) so guideline **4.8** does not apply.
 
-**Safer for review (pick one before submit):**
-1. Keep Google + re-add Sign in with Apple, **or**
-2. Ship **email/password only** for v1.0 (hide Google button)
-
-Current code: Google + email (Apple removed).
+To re-enable Google later: set `EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN=1`, re-add Sign in with Apple, and rebuild.
 
 ---
 
@@ -109,11 +108,12 @@ Current code: Google + email (Apple removed).
 
 ```bash
 cd mobile
-npm run build:ios          # production IPA (auto-increments build number)
+npm run build:ios          # production IPA (skips Apple capability sync; auto-increments build)
 npm run submit:ios         # upload to App Store Connect
 ```
 
 Or submit a specific build:
+
 ```bash
 eas submit --platform ios --profile production --id <BUILD_ID>
 ```
@@ -124,11 +124,11 @@ eas submit --platform ios --profile production --id <BUILD_ID>
 
 Capture on a physical device or Simulator (6.7" iPhone required at minimum):
 
-1. Login  
-2. Calendar with readings  
-3. Day detail / reading form  
-4. Prayers & praise list  
-5. Settings / groups  
+1. Login (email/password + Terms of Use checkbox — no Google)
+2. Calendar with readings (··· safety menu visible on another member’s post)
+3. Day detail / reading form
+4. Prayers & praise list
+5. Settings / groups
 
 Save as PNG; App Store Connect accepts drag-and-drop.
 
@@ -136,8 +136,10 @@ Save as PNG; App Store Connect accepts drag-and-drop.
 
 ## Pre-submit checklist
 
-- [ ] New production EAS build from current `main`
-- [ ] Decide Google vs Apple Sign-In (guideline 4.8)
+- [ ] Merge latest store-ready branch (email-only, password reset, delete account, logo)
+- [ ] Deploy Firestore rules (user profile `delete` allowed)
+- [ ] Privacy page updated on GitHub Pages
+- [ ] New production EAS build
 - [ ] App Store Connect app record for `com.acuratls.gathered`
 - [ ] Paste listing copy + privacy URL
 - [ ] Screenshots uploaded

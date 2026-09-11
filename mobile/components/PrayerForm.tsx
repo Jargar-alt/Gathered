@@ -11,6 +11,8 @@ import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Group, UserProfile } from '@shared/types';
 
+import { assertAllowedContent } from '@/lib/contentFilter';
+
 interface PrayerFormProps {
   group: Group;
   profile: UserProfile;
@@ -21,22 +23,26 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
   const [content, setContent] = useState('');
   const [type, setType] = useState<'request' | 'praise'>('request');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
+    setError('');
     setSubmitting(true);
     try {
+      assertAllowedContent(content);
       await addDoc(collection(db, 'prayers'), {
         uid: profile.uid,
         groupId: group.id,
         type,
-        content,
+        content: content.trim(),
         reactions: {},
         notes: [],
         createdAt: serverTimestamp(),
       });
       onClose();
     } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create prayer');
       console.error('Failed to create prayer:', err);
     } finally {
       setSubmitting(false);
@@ -76,6 +82,8 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
         value={content}
         onChangeText={setContent}
       />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.actions}>
         <Pressable
@@ -169,5 +177,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
+  error: { color: '#ef4444', fontSize: 13 },
   disabled: { opacity: 0.5 },
 });

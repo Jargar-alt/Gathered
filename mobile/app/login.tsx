@@ -9,31 +9,35 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
+  Linking,
 } from 'react-native';
 import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { Ionicons } from '@expo/vector-icons';
 import { auth } from '@/lib/firebase';
-import {
-  getAuthErrorMessage,
-  isGoogleSignInAvailable,
-  signInWithGoogle,
-} from '@/lib/socialAuth';
+import { getAuthErrorMessage } from '@/lib/authErrors';
+
+const TERMS_URL = 'https://jargar-alt.github.io/Gathered/terms.html';
+const PRIVACY_URL = 'https://jargar-alt.github.io/Gathered/privacy.html';
 
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const googleAvailable = isGoogleSignInAvailable();
 
   const handleEmailAuth = async () => {
+    if (!acceptedTerms) {
+      setError('Agree to the Terms of Use before continuing.');
+      return;
+    }
     setError('');
     setInfo('');
     setLoading(true);
@@ -70,19 +74,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogle = async () => {
-    setError('');
-    setInfo('');
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-    } catch (err: unknown) {
-      setError(getAuthErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -91,28 +82,15 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <View style={styles.header}>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityLabel="Gathered logo"
+            />
             <Text style={styles.title}>Gathered</Text>
             <Text style={styles.subtitle}>Where your group reads, prays, and shows up together.</Text>
           </View>
-
-          {googleAvailable && (
-            <View style={styles.socialSection}>
-              <Pressable
-                onPress={handleGoogle}
-                disabled={loading || resetting}
-                style={[styles.googleBtn, (loading || resetting) && styles.disabled]}
-              >
-                <Ionicons name="logo-google" size={18} color="#1c1917" />
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
-              </Pressable>
-
-              <View style={styles.dividerRow}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>or use email</Text>
-                <View style={styles.divider} />
-              </View>
-            </View>
-          )}
 
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
@@ -153,22 +131,52 @@ export default function LoginScreen() {
               </Pressable>
             ) : null}
 
+            <Pressable
+              onPress={() => setAcceptedTerms((v) => !v)}
+              style={styles.termsRow}
+              disabled={loading || resetting}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: acceptedTerms }}
+            >
+              <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
+                {acceptedTerms ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+              <Text style={styles.termsText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL(TERMS_URL)}
+                >
+                  Terms of Use
+                </Text>
+                {' '}(no tolerance for objectionable content or abuse) and{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL(PRIVACY_URL)}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </Pressable>
+
             {error ? <Text style={styles.error}>{error}</Text> : null}
             {info ? <Text style={styles.info}>{info}</Text> : null}
 
             <Pressable
               onPress={handleEmailAuth}
-              disabled={loading || resetting || !email.trim() || !password}
+              disabled={loading || resetting || !email.trim() || !password || !acceptedTerms}
               style={[
                 styles.primaryBtn,
-                (loading || resetting || !email.trim() || !password) && styles.disabled,
+                (loading || resetting || !email.trim() || !password || !acceptedTerms) &&
+                  styles.disabled,
               ]}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.primaryBtnText}>
-                  {isLogin ? 'Sign in with Email' : 'Create Account'}
+                  {isLogin ? 'Sign In' : 'Create Account'}
                 </Text>
               )}
             </Pressable>
@@ -209,6 +217,7 @@ const styles = StyleSheet.create({
     borderColor: '#e7e5e4',
   },
   header: { alignItems: 'center', marginBottom: 24 },
+  logo: { width: 88, height: 88, marginBottom: 12, borderRadius: 20 },
   title: {
     fontSize: 32,
     fontWeight: '700',
@@ -223,27 +232,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: 8,
   },
-  socialSection: { gap: 12, marginBottom: 8 },
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e7e5e4',
-    backgroundColor: '#fff',
-  },
-  googleBtnText: { fontSize: 15, fontWeight: '600', color: '#1c1917' },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 4,
-  },
-  divider: { flex: 1, height: 1, backgroundColor: '#f5f5f4' },
-  dividerText: { fontSize: 12, color: '#a8a29e', fontWeight: '500' },
   form: { gap: 12 },
   label: {
     fontSize: 11,
@@ -264,6 +252,39 @@ const styles = StyleSheet.create({
   },
   forgotBtn: { alignSelf: 'flex-end', marginTop: -4, marginBottom: 4, minHeight: 20 },
   forgotText: { fontSize: 13, fontWeight: '500', color: '#78716c' },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#d6d3d1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: {
+    backgroundColor: '#1c1917',
+    borderColor: '#1c1917',
+  },
+  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  termsText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#57534e',
+    lineHeight: 19,
+  },
+  termsLink: {
+    color: '#1c1917',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
   error: { color: '#ef4444', fontSize: 13, lineHeight: 18 },
   info: { color: '#15803d', fontSize: 13, lineHeight: 18 },
   primaryBtn: {

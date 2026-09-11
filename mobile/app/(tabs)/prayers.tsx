@@ -13,12 +13,17 @@ import PrayerCard from '@/components/PrayerCard';
 import PrayerForm from '@/components/PrayerForm';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { PrayerRequest, UserProfile } from '@shared/types';
+import { getReportedContentIds } from '@/lib/moderation';
 
 export default function PrayersScreen() {
   const { profile, group } = useAuth();
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
   const [members, setMembers] = useState<Record<string, UserProfile>>({});
   const [showForm, setShowForm] = useState(false);
+  const [hiddenContentIds, setHiddenContentIds] = useState<Set<string>>(new Set());
+  const [moderationTick, setModerationTick] = useState(0);
+  const blocked = new Set(profile?.blockedUids ?? []);
+  const refreshModeration = () => setModerationTick((n) => n + 1);
 
   useEffect(() => {
     if (!group || !profile?.uid || !group.memberUids.includes(profile.uid)) {
@@ -55,7 +60,17 @@ export default function PrayersScreen() {
       setMembers(memberData);
     };
     fetchMembers();
-  }, [group?.memberUids, profile?.uid]);
+  }, [group?.memberUids, profile?.uid, moderationTick]);
+
+  useEffect(() => {
+    if (!profile?.uid) {
+      setHiddenContentIds(new Set());
+      return;
+    }
+    getReportedContentIds(profile.uid)
+      .then(setHiddenContentIds)
+      .catch(() => setHiddenContentIds(new Set()));
+  }, [profile?.uid, moderationTick]);
 
   if (!profile || !group) {
     return (
@@ -87,13 +102,16 @@ export default function PrayersScreen() {
           <Text style={styles.emptyText}>No prayer requests yet.</Text>
         </View>
       ) : (
-        prayers.map((prayer) => (
+        prayers
+          .filter((prayer) => !blocked.has(prayer.uid) && !hiddenContentIds.has(prayer.id))
+          .map((prayer) => (
           <PrayerCard
             key={prayer.id}
             prayer={prayer}
             member={members[prayer.uid]}
             members={members}
             profile={profile}
+            onModerationChange={refreshModeration}
           />
         ))
       )}

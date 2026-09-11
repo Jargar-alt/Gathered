@@ -5,11 +5,15 @@ const IS_DEV_CLIENT =
 
 const authConfig = require('./auth.config');
 
-// iosUrlScheme must be present at prebuild or Google Sign-In cannot return to the app.
-const googleSignInPlugin = [
-  '@react-native-google-signin/google-signin',
-  { iosUrlScheme: authConfig.googleIosUrlScheme },
-];
+// Only bake Google Sign-In into the native binary when enabled (v1 is email-only).
+const googleSignInPlugin = authConfig.enableGoogleSignIn
+  ? [
+      [
+        '@react-native-google-signin/google-signin',
+        { iosUrlScheme: authConfig.googleIosUrlScheme },
+      ],
+    ]
+  : [];
 
 module.exports = {
   name: 'Gathered',
@@ -56,7 +60,7 @@ module.exports = {
         },
       },
     ],
-    googleSignInPlugin,
+    ...googleSignInPlugin,
     [
       'expo-splash-screen',
       {
@@ -80,8 +84,13 @@ module.exports = {
     eas: {
       projectId: '6080dfab-8433-4115-9d43-57f1e9b2b685',
     },
-    googleWebClientId: authConfig.googleWebClientId,
-    googleIosClientId: authConfig.googleIosClientId,
-    googleIosUrlScheme: authConfig.googleIosUrlScheme,
+    enableGoogleSignIn: authConfig.enableGoogleSignIn,
+    ...(authConfig.enableGoogleSignIn
+      ? {
+          googleWebClientId: authConfig.googleWebClientId,
+          googleIosClientId: authConfig.googleIosClientId,
+          googleIosUrlScheme: authConfig.googleIosUrlScheme,
+        }
+      : {}),
   },
 };
