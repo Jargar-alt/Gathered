@@ -40,9 +40,8 @@ Google is enabled in `mobile/auth.config.js` (`enableGoogleSignIn: true`). Clien
 
 ```bash
 cd mobile
-npm run build:dev            # test on device
-# or
-npm run build:ios            # App Store
+npm run build:ios
+npm run submit:ios
 ```
 
 Login requires the Terms of Use checkbox before email, Apple, or Google.

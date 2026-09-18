@@ -1,7 +1,7 @@
 # App Store Review Checklist — Gathered
 
 **Bundle ID:** `com.acuratls.gathered`  
-**Version:** `1.0.0`  
+**Version:** `1.1.0`  
 **Team:** JACK RILEY GARBER (`P9V25CHLW2`)  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 

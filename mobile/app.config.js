@@ -5,7 +5,7 @@ const IS_DEV_CLIENT =
 
 const authConfig = require('./auth.config');
 
-// Bake Google Sign-In into the native binary when enabled. Requires a new EAS build.
+// Bake Google Sign-In into the native binary when enabled.
 const googleSignInPlugin = authConfig.enableGoogleSignIn
   ? [
       [
@@ -18,7 +18,7 @@ const googleSignInPlugin = authConfig.enableGoogleSignIn
 module.exports = {
   name: 'Gathered',
   slug: 'gathered',
-  version: '1.0.0',
+  version: '1.1.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'gathered',
