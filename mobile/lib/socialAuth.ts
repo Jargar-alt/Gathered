@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import authConfig from '../auth.config';
+import { isAuthCancelled } from '@/lib/authErrors';
 
 export { getAuthErrorMessage } from '@/lib/authErrors';
 
@@ -125,19 +126,36 @@ async function getAppleCredential() {
     throw new Error('Sign in with Apple is not available on this device.');
   }
 
+  // Firebase expects SHA-256(rawNonce) as a hex string sent to Apple, and the
+  // unhashed rawNonce on the credential. Do not swap them.
   const rawNonce = Crypto.randomUUID();
   const hashedNonce = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    rawNonce
+    rawNonce,
+    { encoding: Crypto.CryptoEncoding.HEX }
   );
 
-  const apple = await AppleAuthentication.signInAsync({
-    requestedScopes: [
-      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-      AppleAuthentication.AppleAuthenticationScope.EMAIL,
-    ],
-    nonce: hashedNonce,
-  });
+  let apple: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    apple = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+  } catch (err: unknown) {
+    if (isAuthCancelled(err)) {
+      throw err;
+    }
+    const message =
+      err instanceof Error ? err.message : 'Sign in with Apple failed.';
+    const wrapped = new Error(message) as Error & { code?: string };
+    if (err && typeof err === 'object' && 'code' in err) {
+      wrapped.code = String((err as { code: string }).code);
+    }
+    throw wrapped;
+  }
 
   if (!apple.identityToken) {
     throw new Error('Sign in with Apple did not return an identity token.');
