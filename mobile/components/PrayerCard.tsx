@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { format } from 'date-fns';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Avatar from '@/components/Avatar';
-import { PrayerRequest, UserProfile } from '@shared/types';
+import { PrayerNote, PrayerRequest, UserProfile } from '@shared/types';
 import { REACTIONS } from '@shared/constants';
 import { assertAllowedContent } from '@/lib/contentFilter';
 import { openModerationMenu } from '@/lib/moderationMenu';
@@ -31,7 +33,7 @@ function formatNoteDate(createdAt: string) {
   }
 }
 
-function getNoteAuthor(note: PrayerRequest['notes'][number], members: Record<string, UserProfile>) {
+function getNoteAuthor(note: PrayerNote, members: Record<string, UserProfile>) {
   const member = members[note.uid];
   return {
     displayName: note.authorName ?? member?.displayName ?? 'Unknown',
@@ -40,10 +42,28 @@ function getNoteAuthor(note: PrayerRequest['notes'][number], members: Record<str
   };
 }
 
+function noteKey(note: PrayerNote, index: number) {
+  return `${note.uid}-${note.createdAt}-${index}`;
+}
+
 export default function PrayerCard({ prayer, member, members, profile, onModerationChange }: PrayerCardProps) {
+  const notes = prayer.notes ?? [];
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteError, setNoteError] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Keep edit draft in sync if the live note list changes under us
+    if (!editingKey) return;
+    const stillThere = notes.some((note, index) => noteKey(note, index) === editingKey);
+    if (!stillThere) {
+      setEditingKey(null);
+      setShowNoteForm(false);
+      setNoteText('');
+    }
+  }, [notes, editingKey]);
 
   const handleReaction = async (emoji: string) => {
     const reactions = { ...prayer.reactions };
@@ -58,25 +78,94 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
     await updateDoc(doc(db, 'prayers', prayer.id), { reactions });
   };
 
-  const handleAddNote = async () => {
-    if (!noteText.trim()) return;
+  const openNewNote = () => {
     setNoteError('');
-    try {
-      assertAllowedContent(noteText);
-      await updateDoc(doc(db, 'prayers', prayer.id), {
-        notes: arrayUnion({
-          uid: profile.uid,
-          text: noteText.trim(),
-          createdAt: new Date().toISOString(),
-          authorName: profile.displayName,
-          authorInitials: profile.initials,
-        }),
-      });
+    if (editingKey) {
+      setEditingKey(null);
       setNoteText('');
-      setShowNoteForm(false);
-    } catch (err) {
-      setNoteError(err instanceof Error ? err.message : 'Could not add note.');
+      setShowNoteForm(true);
+      return;
     }
+    if (showNoteForm) {
+      cancelNoteForm();
+      return;
+    }
+    setNoteText('');
+    setShowNoteForm(true);
+  };
+
+  const startEditNote = (note: PrayerNote, index: number) => {
+    setEditingKey(noteKey(note, index));
+    setNoteText(note.text);
+    setNoteError('');
+    setShowNoteForm(true);
+  };
+
+  const cancelNoteForm = () => {
+    setShowNoteForm(false);
+    setEditingKey(null);
+    setNoteText('');
+    setNoteError('');
+  };
+
+  const handleSaveNote = async () => {
+    const text = noteText.trim();
+    if (!text || savingNote) return;
+    setNoteError('');
+    setSavingNote(true);
+    try {
+      assertAllowedContent(text);
+
+      if (editingKey) {
+        const nextNotes = notes.map((note, index) =>
+          noteKey(note, index) === editingKey
+            ? {
+                ...note,
+                text,
+                authorName: profile.displayName,
+                authorInitials: profile.initials,
+              }
+            : note
+        );
+        await updateDoc(doc(db, 'prayers', prayer.id), { notes: nextNotes });
+      } else {
+        await updateDoc(doc(db, 'prayers', prayer.id), {
+          notes: arrayUnion({
+            uid: profile.uid,
+            text,
+            createdAt: new Date().toISOString(),
+            authorName: profile.displayName,
+            authorInitials: profile.initials,
+          }),
+        });
+      }
+
+      cancelNoteForm();
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : 'Could not save note.');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = (note: PrayerNote, index: number) => {
+    Alert.alert('Delete note?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const key = noteKey(note, index);
+            const nextNotes = notes.filter((_, i) => noteKey(notes[i], i) !== key);
+            await updateDoc(doc(db, 'prayers', prayer.id), { notes: nextNotes });
+            if (editingKey === key) cancelNoteForm();
+          } catch (err) {
+            setNoteError(err instanceof Error ? err.message : 'Could not delete note.');
+          }
+        },
+      },
+    ]);
   };
 
   const createdAtLabel = prayer.createdAt
@@ -147,11 +236,8 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
             </Pressable>
           );
         })}
-        <Pressable
-          onPress={() => setShowNoteForm(!showNoteForm)}
-          style={styles.noteBtn}
-        >
-          <Text style={styles.noteBtnText}>Note</Text>
+        <Pressable onPress={openNewNote} style={styles.noteBtn}>
+          <Text style={styles.noteBtnText}>{showNoteForm && !editingKey ? 'Cancel' : 'Note'}</Text>
         </Pressable>
       </View>
 
@@ -159,29 +245,49 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
         <View style={styles.noteForm}>
           <TextInput
             style={styles.noteInput}
-            placeholder="Write a short note..."
+            placeholder={editingKey ? 'Edit your note...' : 'Write a short note...'}
             value={noteText}
             onChangeText={setNoteText}
+            multiline
+            textAlignVertical="top"
             autoFocus
+            editable={!savingNote}
+            blurOnSubmit={false}
           />
-          <Pressable onPress={handleAddNote} style={styles.sendBtn}>
-            <Text style={styles.sendBtnText}>Send</Text>
-          </Pressable>
+          <View style={styles.noteFormActions}>
+            {editingKey ? (
+              <Pressable onPress={cancelNoteForm} style={styles.noteCancelBtn} disabled={savingNote}>
+                <Text style={styles.noteCancelText}>Cancel</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={handleSaveNote}
+              style={[styles.sendBtn, (!noteText.trim() || savingNote) && styles.sendBtnDisabled]}
+              disabled={!noteText.trim() || savingNote}
+            >
+              {savingNote ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.sendBtnText}>{editingKey ? 'Save' : 'Send'}</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
       )}
       {noteError ? <Text style={styles.noteError}>{noteError}</Text> : null}
 
-      {prayer.notes.length > 0 && (
+      {notes.length > 0 && (
         <View style={styles.notesSection}>
           <Text style={styles.notesHeading}>
-            {prayer.notes.length} {prayer.notes.length === 1 ? 'Note' : 'Notes'}
+            {notes.length} {notes.length === 1 ? 'Note' : 'Notes'}
           </Text>
-          {prayer.notes.map((note, index) => {
+          {notes.map((note, index) => {
             const author = getNoteAuthor(note, members);
             const isOwnNote = note.uid === profile.uid;
+            const key = noteKey(note, index);
             return (
               <View
-                key={`${note.uid}-${note.createdAt}-${index}`}
+                key={key}
                 style={[styles.noteItem, isOwnNote && styles.noteItemOwn]}
               >
                 <Avatar
@@ -202,6 +308,24 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
                     <Text style={styles.noteTime}>{formatNoteDate(note.createdAt)}</Text>
                   </View>
                   <Text style={styles.noteText}>{note.text}</Text>
+                  {isOwnNote ? (
+                    <View style={styles.noteActions}>
+                      <Pressable
+                        onPress={() => startEditNote(note, index)}
+                        hitSlop={8}
+                        disabled={savingNote}
+                      >
+                        <Text style={styles.noteActionText}>Edit</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDeleteNote(note, index)}
+                        hitSlop={8}
+                        disabled={savingNote}
+                      >
+                        <Text style={[styles.noteActionText, styles.noteDeleteText]}>Delete</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             );
@@ -297,26 +421,43 @@ const styles = StyleSheet.create({
   },
   noteBtnText: { fontSize: 12, color: '#78716c' },
   noteForm: {
-    flexDirection: 'row',
     gap: 8,
   },
   noteInput: {
-    flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     backgroundColor: '#fafaf9',
     borderWidth: 1,
     borderColor: '#e7e5e4',
     borderRadius: 8,
     fontSize: 14,
+    minHeight: 72,
+    color: '#1c1917',
   },
-  sendBtn: {
+  noteFormActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  noteCancelBtn: {
     paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f4',
+    justifyContent: 'center',
+  },
+  noteCancelText: { color: '#57534e', fontSize: 14, fontWeight: '600' },
+  sendBtn: {
+    paddingHorizontal: 14,
     paddingVertical: 8,
     backgroundColor: '#1c1917',
     borderRadius: 8,
     justifyContent: 'center',
+    minWidth: 64,
+    alignItems: 'center',
+    minHeight: 36,
   },
+  sendBtnDisabled: { opacity: 0.5 },
   sendBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   noteError: { color: '#ef4444', fontSize: 13 },
   notesSection: {
@@ -382,5 +523,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#44403c',
     lineHeight: 20,
+  },
+  noteActions: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+  },
+  noteActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#57534e',
+  },
+  noteDeleteText: {
+    color: '#dc2626',
   },
 });

@@ -35,7 +35,15 @@ export default function PrayersScreen() {
       q,
       (snapshot) => {
         const sorted = snapshot.docs
-          .map((d) => ({ id: d.id, ...d.data() } as PrayerRequest))
+          .map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              notes: Array.isArray(data.notes) ? data.notes : [],
+              reactions: data.reactions ?? {},
+            } as PrayerRequest;
+          })
           .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         setPrayers(sorted);
       },
