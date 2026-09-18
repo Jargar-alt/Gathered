@@ -34,7 +34,7 @@ module.exports = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: '#fafaf9',
+      backgroundColor: '#EBE3D9',
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
@@ -68,14 +68,14 @@ module.exports = {
       {
         image: './assets/images/splash-icon.png',
         resizeMode: 'contain',
-        backgroundColor: '#fafaf9',
+        backgroundColor: '#EBE3D9',
       },
     ],
     [
       'expo-notifications',
       {
         icon: './assets/images/icon.png',
-        color: '#1c1917',
+        color: '#3D5462',
       },
     ],
   ],

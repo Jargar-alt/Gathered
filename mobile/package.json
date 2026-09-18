@@ -51,7 +51,10 @@
     "build:dev:simulator": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile development-simulator",
     "build:ios": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile production",
     "build:ios:preview": "EXPO_NO_CAPABILITY_SYNC=1 eas build --platform ios --profile preview",
-    "submit:ios": "eas submit --platform ios --profile production"
+    "build:android": "eas build --platform android --profile production",
+    "build:android:preview": "eas build --platform android --profile preview",
+    "submit:ios": "eas submit --platform ios --profile production",
+    "submit:android": "eas submit --platform android --profile production"
   },
   "private": true
 }

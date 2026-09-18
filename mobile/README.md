@@ -1,11 +1,12 @@
 # Gathered Mobile (Expo)
 
-Native iOS app for Gathered — Bible reading accountability and prayer requests. Shares the same Firebase backend as the web app.
+Native iOS and Android app for Gathered — Bible reading accountability and prayer requests. Shares the same Firebase backend as the web app.
 
 ## Prerequisites
 
 - Node.js 20+
-- Apple Developer account ($99/yr)
+- Apple Developer account ($99/yr) for iOS
+- Google Play Developer account ($25 one-time) for Android
 - EAS CLI (`npm install -g eas-cli`)
 
 ## TestFlight / App Store
@@ -23,6 +24,23 @@ npm run submit:ios
 
 After submit, the build appears in App Store Connect → TestFlight.
 
+See [docs/APP_STORE.md](../docs/APP_STORE.md).
+
+## Google Play
+
+```bash
+cd mobile
+npm install
+npm run build:android
+npm run submit:android
+```
+
+- Package: `com.acuratls.gathered`
+- Version: `1.1.0` (`versionCode` auto-increments)
+- Submit profile uploads to the **internal** track as a **draft**
+
+Register Android SHA-1 fingerprints for Google Sign-In (`eas credentials -p android`). See [docs/PLAY_STORE.md](../docs/PLAY_STORE.md) and [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md).
+
 ## Local Metro (optional)
 
 Only useful if you already have a matching native binary installed:
@@ -32,9 +50,9 @@ cd mobile
 npm start
 ```
 
-## Bundle identifier
+## Bundle identifier / package
 
-`com.acuratls.gathered` — change in `app.config.js` if needed.
+`com.acuratls.gathered` — change in `app.config.js` if needed (iOS + Android must stay in sync with store listings and OAuth clients).
 
 ## Features
 
@@ -56,6 +74,6 @@ Push tokens are saved to `users/{uid}.expoPushToken` in Firestore.
 
 ## Auth
 
-Email/password, Sign in with Apple, and Google Sign-In. Same Firebase accounts as the web app — group data syncs automatically.
+Email/password, Sign in with Apple (iOS), and Google Sign-In. Same Firebase accounts as the web app — group data syncs automatically.
 
 See [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md) for Firebase and OAuth configuration.
