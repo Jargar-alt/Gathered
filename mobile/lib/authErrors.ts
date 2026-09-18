@@ -1,11 +1,29 @@
+export function isAuthCancelled(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String((error as { code: string }).code);
+    if (
+      code === 'ERR_REQUEST_CANCELED' ||
+      code === 'ERR_CANCELED' ||
+      code === 'SIGN_IN_CANCELLED'
+    ) {
+      return true;
+    }
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('cancelled') || msg.includes('canceled');
+  }
+  return false;
+}
+
 export function getAuthErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'code' in error) {
     const code = String((error as { code: string }).code);
-    if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') {
+    if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED' || code === 'SIGN_IN_CANCELLED') {
       return 'Sign-in was cancelled.';
     }
     if (code === 'auth/requires-recent-login') {
-      return 'For security, enter your password again to delete your account.';
+      return 'For security, confirm your account again to delete it.';
     }
     if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
       return 'Incorrect password. Try again.';
@@ -50,7 +68,7 @@ export function getAuthErrorMessage(error: unknown): string {
       return 'Password should be at least 6 characters.';
     }
     if (error.message.includes('auth/requires-recent-login')) {
-      return 'For security, enter your password again to delete your account.';
+      return 'For security, confirm your account again to delete it.';
     }
     return error.message;
   }

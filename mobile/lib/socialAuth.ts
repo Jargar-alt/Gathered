@@ -1,10 +1,10 @@
-import { Platform } from 'react-native';
+import { Platform, TurboModuleRegistry } from 'react-native';
 import Constants from 'expo-constants';
 import {
   GoogleAuthProvider,
   signInWithCredential,
+  reauthenticateWithCredential,
 } from 'firebase/auth';
-import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import { auth } from '@/lib/firebase';
 import authConfig from '../auth.config';
 
@@ -15,6 +15,8 @@ type GoogleExtra = {
   googleWebClientId?: string;
   googleIosClientId?: string;
 };
+
+type GoogleSignInModule = typeof import('@react-native-google-signin/google-signin');
 
 function isGoogleEnabled(): boolean {
   const extra = (Constants.expoConfig?.extra ?? {}) as GoogleExtra;
@@ -42,9 +44,19 @@ function getGoogleConfig(): { webClientId: string; iosClientId?: string } {
   };
 }
 
+function hasGoogleNativeModule(): boolean {
+  return TurboModuleRegistry.get('RNGoogleSignin') != null;
+}
+
+function loadGoogleSignin(): GoogleSignInModule {
+  // Lazy: the package calls TurboModuleRegistry.getEnforcing on import.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('@react-native-google-signin/google-signin');
+}
+
 let googleConfigured = false;
 
-function configureGoogleSignIn() {
+function configureGoogleSignIn(GoogleSignin: GoogleSignInModule['GoogleSignin']) {
   if (googleConfigured) return;
   const { webClientId, iosClientId } = getGoogleConfig();
   if (!webClientId) return;
@@ -57,12 +69,16 @@ function configureGoogleSignIn() {
 }
 
 export function isGoogleSignInAvailable(): boolean {
-  return isGoogleEnabled() && Boolean(getGoogleConfig().webClientId);
+  return (
+    isGoogleEnabled() &&
+    Boolean(getGoogleConfig().webClientId) &&
+    hasGoogleNativeModule()
+  );
 }
 
-export async function signInWithGoogle(): Promise<void> {
-  if (!isGoogleSignInAvailable()) {
-    throw new Error('Google Sign-In is not available in this build.');
+async function getGoogleIdToken(): Promise<string> {
+  if (!hasGoogleNativeModule()) {
+    throw new Error('Google Sign-In requires a new native build. Rebuild the app, then try again.');
   }
 
   const { webClientId } = getGoogleConfig();
@@ -72,7 +88,8 @@ export async function signInWithGoogle(): Promise<void> {
     );
   }
 
-  configureGoogleSignIn();
+  const { GoogleSignin, isSuccessResponse } = loadGoogleSignin();
+  configureGoogleSignIn(GoogleSignin);
   if (Platform.OS === 'android') {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   }
@@ -86,7 +103,48 @@ export async function signInWithGoogle(): Promise<void> {
   if (!idToken) {
     throw new Error('Google Sign-In did not return an ID token.');
   }
+  return idToken;
+}
 
+export async function signInWithGoogle(): Promise<void> {
+  if (!isGoogleSignInAvailable()) {
+    throw new Error('Google Sign-In is not available in this build.');
+  }
+
+  const idToken = await getGoogleIdToken();
   const credential = GoogleAuthProvider.credential(idToken);
   await signInWithCredential(auth, credential);
+}
+
+export async function reauthenticateWithGoogle(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('You must be signed in to delete your account.');
+  }
+  const idToken = await getGoogleIdToken();
+  const credential = GoogleAuthProvider.credential(idToken);
+  await reauthenticateWithCredential(user, credential);
+}
+
+export async function signOutGoogle(): Promise<void> {
+  if (!hasGoogleNativeModule()) return;
+  try {
+    const { GoogleSignin } = loadGoogleSignin();
+    configureGoogleSignIn(GoogleSignin);
+    await GoogleSignin.signOut();
+  } catch {
+    // Already signed out of Google, or native module missing in this binary
+  }
+}
+
+export async function revokeGoogleAccess(): Promise<void> {
+  if (!hasGoogleNativeModule()) return;
+  try {
+    const { GoogleSignin } = loadGoogleSignin();
+    configureGoogleSignIn(GoogleSignin);
+    await GoogleSignin.revokeAccess();
+    await GoogleSignin.signOut();
+  } catch {
+    // Ignore — account deletion should still proceed
+  }
 }

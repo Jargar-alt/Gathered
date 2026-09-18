@@ -1,8 +1,7 @@
 /**
  * Auth / OAuth config.
  *
- * Google Sign-In is OFF for App Store (guideline 4.8 rejection).
- * Email/password only until Sign in with Apple is added alongside Google.
+ * Google is on. Sign in with Apple must ship alongside it (App Store 4.8).
  */
 const DEFAULTS = {
   googleWebClientId:
@@ -14,7 +13,7 @@ const DEFAULTS = {
 };
 
 module.exports = {
-  enableGoogleSignIn: false,
+  enableGoogleSignIn: true,
   googleWebClientId:
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || DEFAULTS.googleWebClientId,
   googleIosClientId:

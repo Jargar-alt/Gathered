@@ -12,13 +12,18 @@ import {
   Image,
   Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { getAuthErrorMessage } from '@/lib/authErrors';
+import { getAuthErrorMessage, isAuthCancelled } from '@/lib/authErrors';
+import {
+  isGoogleSignInAvailable,
+  signInWithGoogle,
+} from '@/lib/socialAuth';
 
 const TERMS_URL = 'https://jargar-alt.github.io/Gathered/terms.html';
 const PRIVACY_URL = 'https://jargar-alt.github.io/Gathered/privacy.html';
@@ -31,7 +36,10 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const googleAvailable = isGoogleSignInAvailable();
+  const busy = loading || googleLoading || resetting;
 
   const handleEmailAuth = async () => {
     if (!acceptedTerms) {
@@ -74,6 +82,25 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGoogleAuth = async () => {
+    if (!acceptedTerms) {
+      setError('Agree to the Terms of Use before continuing.');
+      return;
+    }
+    setError('');
+    setInfo('');
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      if (!isAuthCancelled(err)) {
+        setError(getAuthErrorMessage(err));
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -102,7 +129,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoComplete="email"
               textContentType="emailAddress"
-              editable={!loading && !resetting}
+              editable={!busy}
             />
 
             <Text style={styles.label}>Password</Text>
@@ -113,13 +140,13 @@ export default function LoginScreen() {
               secureTextEntry
               autoComplete={isLogin ? 'password' : 'new-password'}
               textContentType={isLogin ? 'password' : 'newPassword'}
-              editable={!loading && !resetting}
+              editable={!busy}
             />
 
             {isLogin ? (
               <Pressable
                 onPress={handleForgotPassword}
-                disabled={loading || resetting}
+                disabled={busy}
                 style={styles.forgotBtn}
                 hitSlop={8}
               >
@@ -134,7 +161,7 @@ export default function LoginScreen() {
             <Pressable
               onPress={() => setAcceptedTerms((v) => !v)}
               style={styles.termsRow}
-              disabled={loading || resetting}
+              disabled={busy}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: acceptedTerms }}
             >
@@ -165,10 +192,10 @@ export default function LoginScreen() {
 
             <Pressable
               onPress={handleEmailAuth}
-              disabled={loading || resetting || !email.trim() || !password || !acceptedTerms}
+              disabled={busy || !email.trim() || !password || !acceptedTerms}
               style={[
                 styles.primaryBtn,
-                (loading || resetting || !email.trim() || !password || !acceptedTerms) &&
+                (busy || !email.trim() || !password || !acceptedTerms) &&
                   styles.disabled,
               ]}
             >
@@ -180,6 +207,34 @@ export default function LoginScreen() {
                 </Text>
               )}
             </Pressable>
+
+            {googleAvailable ? (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>Or continue with</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                <Pressable
+                  onPress={handleGoogleAuth}
+                  disabled={busy || !acceptedTerms}
+                  style={[
+                    styles.googleBtn,
+                    (busy || !acceptedTerms) && styles.disabled,
+                  ]}
+                >
+                  {googleLoading ? (
+                    <ActivityIndicator color="#1c1917" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={18} color="#4285F4" />
+                      <Text style={styles.googleBtnText}>Google</Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
+            ) : null}
           </View>
 
           <Pressable
@@ -189,7 +244,7 @@ export default function LoginScreen() {
               setInfo('');
             }}
             style={styles.switchBtn}
-            disabled={loading || resetting}
+            disabled={busy}
           >
             <Text style={styles.switchText}>
               {isLogin ? "Don't have an account? " : 'Already have an account? '}
@@ -297,6 +352,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e7e5e4' },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#a8a29e',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+    minHeight: 48,
+  },
+  googleBtnText: { color: '#1c1917', fontWeight: '600', fontSize: 15 },
   disabled: { opacity: 0.5 },
   switchBtn: { marginTop: 24, alignItems: 'center' },
   switchText: { fontSize: 14, color: '#78716c' },

@@ -16,8 +16,9 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
-import { deleteAccount } from '@/lib/deleteAccount';
-import { getAuthErrorMessage } from '@/lib/authErrors';
+import { deleteAccount, hasGoogleProvider, hasPasswordProvider } from '@/lib/deleteAccount';
+import { getAuthErrorMessage, isAuthCancelled } from '@/lib/authErrors';
+import { signOutGoogle } from '@/lib/socialAuth';
 import { unblockUser } from '@/lib/moderation';
 import { AVATAR_COLORS, AVATAR_COLOR_MAP } from '@shared/constants';
 import { UserProfile } from '@shared/types';
@@ -183,8 +184,12 @@ export default function SettingsScreen() {
     setDeleteError('');
     setDeleting(true);
     try {
-      await deleteAccount(deletePassword);
+      await deleteAccount(hasPasswordProvider() ? deletePassword : undefined);
     } catch (err) {
+      if (isAuthCancelled(err)) {
+        setDeleting(false);
+        return;
+      }
       setDeleteError(getAuthErrorMessage(err));
       setDeleting(false);
     }
@@ -435,7 +440,14 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      <Pressable onPress={() => signOut(auth)} style={styles.signOutBtn} disabled={deleting}>
+      <Pressable
+        onPress={async () => {
+          await signOutGoogle();
+          await signOut(auth);
+        }}
+        style={styles.signOutBtn}
+        disabled={deleting}
+      >
         <Ionicons name="log-out-outline" size={18} color="#dc2626" />
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
@@ -448,20 +460,30 @@ export default function SettingsScreen() {
           </Pressable>
         ) : (
           <View style={styles.deleteForm}>
-            <Text style={styles.sectionHint}>
-              Enter your password to permanently delete your Gathered account.
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={deletePassword}
-              onChangeText={setDeletePassword}
-              placeholder="Password"
-              placeholderTextColor="#a8a29e"
-              secureTextEntry
-              autoComplete="password"
-              textContentType="password"
-              editable={!deleting}
-            />
+            {hasPasswordProvider() ? (
+              <>
+                <Text style={styles.sectionHint}>
+                  Enter your password to permanently delete your Gathered account.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  placeholder="Password"
+                  placeholderTextColor="#a8a29e"
+                  secureTextEntry
+                  autoComplete="password"
+                  textContentType="password"
+                  editable={!deleting}
+                />
+              </>
+            ) : (
+              <Text style={styles.sectionHint}>
+                {hasGoogleProvider()
+                  ? 'Sign in with Google again to confirm and permanently delete your Gathered account.'
+                  : 'Confirm to permanently delete your Gathered account.'}
+              </Text>
+            )}
             {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
             <View style={styles.inlineActions}>
               <Pressable
@@ -477,13 +499,18 @@ export default function SettingsScreen() {
               </Pressable>
               <Pressable
                 onPress={confirmDeleteAccount}
-                style={[styles.deleteConfirmBtn, (!deletePassword || deleting) && styles.saveBtnDisabled]}
-                disabled={!deletePassword || deleting}
+                style={[
+                  styles.deleteConfirmBtn,
+                  ((hasPasswordProvider() && !deletePassword) || deleting) && styles.saveBtnDisabled,
+                ]}
+                disabled={(hasPasswordProvider() && !deletePassword) || deleting}
               >
                 {deleting ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.saveBtnText}>Delete forever</Text>
+                  <Text style={styles.saveBtnText}>
+                    {hasPasswordProvider() ? 'Delete forever' : hasGoogleProvider() ? 'Continue with Google' : 'Delete forever'}
+                  </Text>
                 )}
               </Pressable>
             </View>

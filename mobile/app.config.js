@@ -5,7 +5,7 @@ const IS_DEV_CLIENT =
 
 const authConfig = require('./auth.config');
 
-// Only bake Google Sign-In into the native binary when enabled (v1 is email-only).
+// Bake Google Sign-In into the native binary when enabled. Requires a new EAS build.
 const googleSignInPlugin = authConfig.enableGoogleSignIn
   ? [
       [
