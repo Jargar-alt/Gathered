@@ -1,7 +1,7 @@
 /**
  * Auth / OAuth config.
  *
- * Google is on. Sign in with Apple must ship alongside it (App Store 4.8).
+ * Google + Sign in with Apple (App Store guideline 4.8).
  */
 const DEFAULTS = {
   googleWebClientId:

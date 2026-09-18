@@ -16,7 +16,11 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { reauthenticateWithGoogle, revokeGoogleAccess } from '@/lib/socialAuth';
+import {
+  reauthenticateWithApple,
+  reauthenticateWithGoogle,
+  revokeGoogleAccess,
+} from '@/lib/socialAuth';
 
 export function hasPasswordProvider(): boolean {
   return Boolean(auth.currentUser?.providerData.some((p) => p.providerId === 'password'));
@@ -24,6 +28,10 @@ export function hasPasswordProvider(): boolean {
 
 export function hasGoogleProvider(): boolean {
   return Boolean(auth.currentUser?.providerData.some((p) => p.providerId === 'google.com'));
+}
+
+export function hasAppleProvider(): boolean {
+  return Boolean(auth.currentUser?.providerData.some((p) => p.providerId === 'apple.com'));
 }
 
 async function deleteOwnedInGroup(collectionName: string, groupId: string, uid: string) {
@@ -62,6 +70,11 @@ async function reauthenticate(password?: string): Promise<void> {
     return;
   }
 
+  if (hasAppleProvider()) {
+    await reauthenticateWithApple();
+    return;
+  }
+
   if (hasGoogleProvider()) {
     await reauthenticateWithGoogle();
     return;
@@ -73,7 +86,7 @@ async function reauthenticate(password?: string): Promise<void> {
 /**
  * Permanently deletes the signed-in account and related data.
  * Email/password accounts require the current password.
- * Google accounts reauthenticate with Google Sign-In.
+ * Apple/Google accounts reauthenticate with their provider.
  */
 export async function deleteAccount(password?: string): Promise<void> {
   const user = auth.currentUser;

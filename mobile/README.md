@@ -105,8 +105,8 @@ Push tokens are saved to `users/{uid}.expoPushToken` in Firestore.
 
 ## Auth
 
-Email/password and Google Sign-In. Same Firebase accounts as the web app — group data syncs automatically.
+Email/password, Sign in with Apple, and Google Sign-In. Same Firebase accounts as the web app — group data syncs automatically.
 
-Google is a native module: after turning it on, make a **new EAS build** (not Expo Go / not JS-only).
+Apple and Google are native: after turning them on, make a **new EAS build** (not Expo Go / not JS-only).
 
 See [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md) for Firebase and OAuth configuration.

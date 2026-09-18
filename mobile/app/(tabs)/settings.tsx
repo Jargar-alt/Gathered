@@ -16,7 +16,7 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
-import { deleteAccount, hasGoogleProvider, hasPasswordProvider } from '@/lib/deleteAccount';
+import { deleteAccount, hasAppleProvider, hasGoogleProvider, hasPasswordProvider } from '@/lib/deleteAccount';
 import { getAuthErrorMessage, isAuthCancelled } from '@/lib/authErrors';
 import { signOutGoogle } from '@/lib/socialAuth';
 import { unblockUser } from '@/lib/moderation';
@@ -479,9 +479,11 @@ export default function SettingsScreen() {
               </>
             ) : (
               <Text style={styles.sectionHint}>
-                {hasGoogleProvider()
-                  ? 'Sign in with Google again to confirm and permanently delete your Gathered account.'
-                  : 'Confirm to permanently delete your Gathered account.'}
+                {hasAppleProvider()
+                  ? 'Sign in with Apple again to confirm and permanently delete your Gathered account.'
+                  : hasGoogleProvider()
+                    ? 'Sign in with Google again to confirm and permanently delete your Gathered account.'
+                    : 'Confirm to permanently delete your Gathered account.'}
               </Text>
             )}
             {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
@@ -509,7 +511,13 @@ export default function SettingsScreen() {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.saveBtnText}>
-                    {hasPasswordProvider() ? 'Delete forever' : hasGoogleProvider() ? 'Continue with Google' : 'Delete forever'}
+                    {hasPasswordProvider()
+                      ? 'Delete forever'
+                      : hasAppleProvider()
+                        ? 'Continue with Apple'
+                        : hasGoogleProvider()
+                          ? 'Continue with Google'
+                          : 'Delete forever'}
                   </Text>
                 )}
               </Pressable>

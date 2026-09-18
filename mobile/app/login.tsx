@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -21,7 +22,9 @@ import {
 import { auth } from '@/lib/firebase';
 import { getAuthErrorMessage, isAuthCancelled } from '@/lib/authErrors';
 import {
+  isAppleSignInAvailable,
   isGoogleSignInAvailable,
+  signInWithApple,
   signInWithGoogle,
 } from '@/lib/socialAuth';
 
@@ -37,9 +40,26 @@ export default function LoginScreen() {
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const googleAvailable = isGoogleSignInAvailable();
-  const busy = loading || googleLoading || resetting;
+  const socialAvailable = googleAvailable || appleAvailable;
+  const busy = loading || googleLoading || appleLoading || resetting;
+
+  useEffect(() => {
+    let cancelled = false;
+    isAppleSignInAvailable()
+      .then((ok) => {
+        if (!cancelled) setAppleAvailable(ok);
+      })
+      .catch(() => {
+        if (!cancelled) setAppleAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleEmailAuth = async () => {
     if (!acceptedTerms) {
@@ -98,6 +118,25 @@ export default function LoginScreen() {
       }
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleAuth = async () => {
+    if (!acceptedTerms) {
+      setError('Agree to the Terms of Use before continuing.');
+      return;
+    }
+    setError('');
+    setInfo('');
+    setAppleLoading(true);
+    try {
+      await signInWithApple();
+    } catch (err: unknown) {
+      if (!isAuthCancelled(err)) {
+        setError(getAuthErrorMessage(err));
+      }
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -208,7 +247,7 @@ export default function LoginScreen() {
               )}
             </Pressable>
 
-            {googleAvailable ? (
+            {socialAvailable ? (
               <>
                 <View style={styles.divider}>
                   <View style={styles.dividerLine} />
@@ -216,23 +255,46 @@ export default function LoginScreen() {
                   <View style={styles.dividerLine} />
                 </View>
 
-                <Pressable
-                  onPress={handleGoogleAuth}
-                  disabled={busy || !acceptedTerms}
-                  style={[
-                    styles.googleBtn,
-                    (busy || !acceptedTerms) && styles.disabled,
-                  ]}
-                >
-                  {googleLoading ? (
-                    <ActivityIndicator color="#1c1917" />
+                {appleAvailable ? (
+                  appleLoading ? (
+                    <View style={styles.appleLoading}>
+                      <ActivityIndicator color="#1c1917" />
+                    </View>
                   ) : (
-                    <>
-                      <Ionicons name="logo-google" size={18} color="#4285F4" />
-                      <Text style={styles.googleBtnText}>Google</Text>
-                    </>
-                  )}
-                </Pressable>
+                    <View
+                      pointerEvents={busy || !acceptedTerms ? 'none' : 'auto'}
+                      style={(busy || !acceptedTerms) && styles.disabled}
+                    >
+                      <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                        cornerRadius={12}
+                        style={styles.appleBtn}
+                        onPress={handleAppleAuth}
+                      />
+                    </View>
+                  )
+                ) : null}
+
+                {googleAvailable ? (
+                  <Pressable
+                    onPress={handleGoogleAuth}
+                    disabled={busy || !acceptedTerms}
+                    style={[
+                      styles.googleBtn,
+                      (busy || !acceptedTerms) && styles.disabled,
+                    ]}
+                  >
+                    {googleLoading ? (
+                      <ActivityIndicator color="#1c1917" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-google" size={18} color="#4285F4" />
+                        <Text style={styles.googleBtnText}>Google</Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
               </>
             ) : null}
           </View>
@@ -379,6 +441,18 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   googleBtnText: { color: '#1c1917', fontWeight: '600', fontSize: 15 },
+  appleBtn: {
+    width: '100%',
+    height: 48,
+    opacity: 1,
+  },
+  appleLoading: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   disabled: { opacity: 0.5 },
   switchBtn: { marginTop: 24, alignItems: 'center' },
   switchText: { fontSize: 14, color: '#78716c' },

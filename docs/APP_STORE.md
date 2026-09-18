@@ -35,7 +35,7 @@ Record scripture references and short reflections. See who in your group showed 
 Post requests or praise reports, react with emoji, and add notes so encouragement stays attached to the prayer.
 
 **Private by design**
-Your group’s readings and prayers are only visible to members. Sign in with email and password or Google. Push notifications are optional.
+Your group’s readings and prayers are only visible to members. Sign in with email and password, Apple, or Google. Push notifications are optional.
 
 Gathered is for the quiet work of showing up—for Scripture, for prayer, and for one another.
 
@@ -76,8 +76,9 @@ Encryption: export compliance already set (`ITSAppUsesNonExemptEncryption: false
 ```
 Gathered is a private small-group Bible reading and prayer app.
 
-This build addresses 1.2 (UGC) and adds Google Sign-In:
-- Users must accept Terms of Use (EULA) on the login/sign-up screen before Sign In, Create Account, or Google. Terms state zero tolerance for objectionable content and abusive users: https://jargar-alt.github.io/Gathered/terms.html
+This build addresses 1.2 (UGC) and 4.8 (Sign in with Apple alongside Google):
+- Sign-in options: email/password, Sign in with Apple, and Google.
+- Users must accept Terms of Use (EULA) on the login/sign-up screen before continuing. Terms state zero tolerance for objectionable content and abusive users: https://jargar-alt.github.io/Gathered/terms.html
 - New posts are filtered for common objectionable language.
 - On any other member’s reading or prayer, tap ··· to Flag content or Block user. Flagged posts are hidden for the reporter. Blocked users’ content is hidden. Unblock is in Settings.
 
@@ -97,11 +98,9 @@ Screen recording of Terms + Flag + Block is attached in App Review Information n
 
 ## Auth
 
-Email/password and **Google Sign-In**. Google is enabled in `mobile/auth.config.js`.
+Email/password, **Sign in with Apple**, and **Google Sign-In**.
 
-**Guideline 4.8:** the next App Store update should also include Sign in with Apple, or Apple may reject Google-only third-party login again.
-
-Rebuild native (`npm run build:ios`) — Google is not an OTA/JS-only change.
+Rebuild native (`npm run build:ios`) — Apple/Google are not OTA/JS-only changes. Enable **Sign In with Apple** on App ID `com.acuratls.gathered` (builds use `EXPO_NO_CAPABILITY_SYNC=1`).
 
 ---
 
@@ -125,7 +124,7 @@ eas submit --platform ios --profile production --id <BUILD_ID>
 
 Capture on a physical device or Simulator (6.7" iPhone required at minimum):
 
-1. Login (email/password + Google + Terms of Use checkbox)
+1. Login (email/password + Apple + Google + Terms of Use checkbox)
 2. Calendar with readings (··· safety menu visible on another member’s post)
 3. Day detail / reading form
 4. Prayers & praise list
