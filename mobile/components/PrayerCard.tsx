@@ -14,6 +14,7 @@ import { db } from '@/lib/firebase';
 import Avatar from '@/components/Avatar';
 import { PrayerNote, PrayerRequest, UserProfile } from '@shared/types';
 import { REACTIONS } from '@shared/constants';
+import { colors } from '@shared/colors';
 import { assertAllowedContent } from '@/lib/contentFilter';
 import { openModerationMenu } from '@/lib/moderationMenu';
 
@@ -266,7 +267,7 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
               disabled={!noteText.trim() || savingNote}
             >
               {savingNote ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.onPrimary} />
               ) : (
                 <Text style={styles.sendBtnText}>{editingKey ? 'Save' : 'Send'}</Text>
               )}
@@ -338,11 +339,11 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     marginBottom: 16,
     gap: 12,
   },
@@ -363,11 +364,11 @@ const styles = StyleSheet.create({
   authorName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1c1917',
+    color: colors.text,
   },
   timestamp: {
     fontSize: 10,
-    color: '#a8a29e',
+    color: colors.textSubtle,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginTop: 2,
@@ -377,8 +378,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  requestBadge: { backgroundColor: '#fffbeb' },
-  praiseBadge: { backgroundColor: '#ecfdf5' },
+  requestBadge: { backgroundColor: colors.surfaceMuted },
+  praiseBadge: { backgroundColor: colors.rejoice },
   typeText: {
     fontSize: 10,
     fontWeight: '700',
@@ -386,12 +387,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   moreBtn: { paddingHorizontal: 6, paddingVertical: 2, marginLeft: 4 },
-  moreBtnText: { fontSize: 18, color: '#a8a29e', fontWeight: '700' },
-  requestText: { color: '#b45309' },
-  praiseText: { color: '#047857' },
+  moreBtnText: { fontSize: 18, color: colors.textSubtle, fontWeight: '700' },
+  requestText: { color: colors.pray },
+  praiseText: { color: colors.text },
   content: {
     fontSize: 15,
-    color: '#44403c',
+    color: colors.text,
     lineHeight: 22,
   },
   reactionsRow: {
@@ -405,34 +406,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 20,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     gap: 4,
   },
   reactionActive: {
-    backgroundColor: '#e7e5e4',
+    backgroundColor: colors.border,
   },
   reactionEmoji: { fontSize: 14 },
-  reactionCount: { fontSize: 12, fontWeight: '700', color: '#1c1917' },
+  reactionCount: { fontSize: 12, fontWeight: '700', color: colors.text },
   noteBtn: {
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
   },
-  noteBtnText: { fontSize: 12, color: '#78716c' },
+  noteBtnText: { fontSize: 12, color: colors.textMuted },
   noteForm: {
     gap: 8,
   },
   noteInput: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     borderRadius: 8,
     fontSize: 14,
     minHeight: 72,
-    color: '#1c1917',
+    color: colors.text,
   },
   noteFormActions: {
     flexDirection: 'row',
@@ -443,14 +444,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#f5f5f4',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
   },
-  noteCancelText: { color: '#57534e', fontSize: 14, fontWeight: '600' },
+  noteCancelText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
   sendBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.text,
     borderRadius: 8,
     justifyContent: 'center',
     minWidth: 64,
@@ -458,11 +459,11 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   sendBtnDisabled: { opacity: 0.5 },
-  sendBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  noteError: { color: '#ef4444', fontSize: 13 },
+  sendBtnText: { color: colors.onPrimary, fontSize: 14, fontWeight: '600' },
+  noteError: { color: colors.danger, fontSize: 13 },
   notesSection: {
     borderTopWidth: 1,
-    borderTopColor: '#f5f5f4',
+    borderTopColor: colors.surfaceMuted,
     paddingTop: 12,
     gap: 10,
   },
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#a8a29e',
+    color: colors.textSubtle,
   },
   noteItem: {
     flexDirection: 'row',
@@ -483,11 +484,11 @@ const styles = StyleSheet.create({
   },
   noteContent: {
     flex: 1,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#f5f5f4',
+    borderColor: colors.surfaceMuted,
   },
   noteMeta: {
     flexDirection: 'row',
@@ -499,13 +500,13 @@ const styles = StyleSheet.create({
   noteAuthor: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1c1917',
+    color: colors.text,
   },
   noteYouBadge: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#57534e',
-    backgroundColor: '#e7e5e4',
+    color: colors.textSecondary,
+    backgroundColor: colors.border,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -513,15 +514,15 @@ const styles = StyleSheet.create({
   },
   noteDot: {
     fontSize: 12,
-    color: '#d6d3d1',
+    color: colors.border,
   },
   noteTime: {
     fontSize: 11,
-    color: '#a8a29e',
+    color: colors.textSubtle,
   },
   noteText: {
     fontSize: 14,
-    color: '#44403c',
+    color: colors.text,
     lineHeight: 20,
   },
   noteActions: {
@@ -532,9 +533,9 @@ const styles = StyleSheet.create({
   noteActionText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#57534e',
+    color: colors.textSecondary,
   },
   noteDeleteText: {
-    color: '#dc2626',
+    color: colors.danger,
   },
 });

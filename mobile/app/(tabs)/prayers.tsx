@@ -13,6 +13,7 @@ import PrayerCard from '@/components/PrayerCard';
 import PrayerForm from '@/components/PrayerForm';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { PrayerRequest, UserProfile } from '@shared/types';
+import { colors } from '@shared/colors';
 import { getReportedContentIds } from '@/lib/moderation';
 
 export default function PrayersScreen() {
@@ -83,7 +84,7 @@ export default function PrayersScreen() {
   if (!profile || !group) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#78716c" />
+        <ActivityIndicator color={colors.textMuted} />
       </View>
     );
   }
@@ -128,7 +129,7 @@ export default function PrayersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafaf9' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, paddingBottom: 120 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
@@ -137,22 +138,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  title: { fontSize: 24, fontWeight: '700', color: '#1c1917' },
+  title: { fontSize: 24, fontWeight: '700', color: colors.brand },
   newBtn: {
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.pray,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
   },
-  newBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  newBtnText: { color: colors.text, fontSize: 14, fontWeight: '600' },
   empty: {
     padding: 48,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
   },
-  emptyText: { color: '#a8a29e', fontStyle: 'italic' },
+  emptyText: { color: colors.textSubtle, fontStyle: 'italic' },
 });

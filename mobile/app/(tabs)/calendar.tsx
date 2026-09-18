@@ -37,6 +37,7 @@ import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { parseLocalDate } from '@/lib/dates';
 import { ReadingEntry, UserProfile } from '@shared/types';
 import { REACTIONS, AVATAR_COLOR_MAP } from '@shared/constants';
+import { colors } from '@shared/colors';
 import { assertAllowedContent } from '@/lib/contentFilter';
 import { getReportedContentIds } from '@/lib/moderation';
 import { openModerationMenu } from '@/lib/moderationMenu';
@@ -113,7 +114,7 @@ export default function CalendarScreen() {
   if (!profile || !group) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#78716c" />
+        <ActivityIndicator color={colors.textMuted} />
       </View>
     );
   }
@@ -166,8 +167,8 @@ export default function CalendarScreen() {
                       styles.dot,
                       {
                         backgroundColor: members[e.uid]?.avatarColor
-                          ? AVATAR_COLOR_MAP[members[e.uid].avatarColor] ?? '#d6d3d1'
-                          : '#d6d3d1',
+                          ? AVATAR_COLOR_MAP[members[e.uid].avatarColor] ?? colors.border
+                          : colors.border,
                       },
                     ]}
                   />
@@ -357,7 +358,7 @@ function ReadingCard({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafaf9' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, paddingBottom: 120 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   monthHeader: {
@@ -366,17 +367,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  title: { fontSize: 24, fontWeight: '700', color: '#1c1917' },
+  title: { fontSize: 24, fontWeight: '700', color: colors.brand },
   nav: { flexDirection: 'row', gap: 8 },
   navBtn: { padding: 8 },
-  navBtnText: { fontSize: 20, color: '#57534e' },
+  navBtnText: { fontSize: 20, color: colors.textSecondary },
   weekRow: { flexDirection: 'row', marginBottom: 4 },
   weekDay: {
     flex: 1,
     textAlign: 'center',
     fontSize: 10,
     fontWeight: '700',
-    color: '#a8a29e',
+    color: colors.textSubtle,
     textTransform: 'uppercase',
     letterSpacing: 1,
     paddingVertical: 8,
@@ -387,27 +388,27 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#f5f5f4',
+    borderColor: colors.surfaceMuted,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
   dayCellMuted: { opacity: 0.2 },
-  dayCellSelected: { backgroundColor: '#1c1917', borderColor: '#1c1917' },
-  dayCellToday: { borderColor: '#a8a29e' },
-  dayNum: { fontSize: 12, fontWeight: '500', color: '#44403c' },
-  dayNumSelected: { color: '#fff' },
+  dayCellSelected: { backgroundColor: colors.read, borderColor: colors.read },
+  dayCellToday: { borderColor: colors.brand },
+  dayNum: { fontSize: 12, fontWeight: '500', color: colors.text },
+  dayNumSelected: { color: colors.text },
   dots: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 2 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dayPanel: {
     marginTop: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
   },
   dayPanelHeader: {
     flexDirection: 'row',
@@ -415,56 +416,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  dayPanelTitle: { fontSize: 16, fontWeight: '700', color: '#1c1917' },
-  recordBtn: { fontSize: 14, fontWeight: '600', color: '#1c1917' },
-  noEntries: { color: '#a8a29e', fontStyle: 'italic', fontSize: 14 },
+  dayPanelTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  recordBtn: { fontSize: 14, fontWeight: '600', color: colors.text },
+  noEntries: { color: colors.textSubtle, fontStyle: 'italic', fontSize: 14 },
   form: { gap: 12 },
   formLabel: {
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#a8a29e',
+    color: colors.textSubtle,
   },
   formInput: {
     padding: 12,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     borderRadius: 12,
     fontSize: 14,
   },
   formTextarea: { minHeight: 80, textAlignVertical: 'top' },
-  formError: { color: '#ef4444', fontSize: 13 },
+  formError: { color: colors.danger, fontSize: 13 },
   formActions: { flexDirection: 'row', gap: 8 },
   formSubmit: {
     flex: 1,
     paddingVertical: 12,
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.read,
     borderRadius: 12,
     alignItems: 'center',
   },
-  formSubmitText: { color: '#fff', fontWeight: '600' },
+  formSubmitText: { color: colors.text, fontWeight: '600' },
   formCancel: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f5f5f4',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 12,
     justifyContent: 'center',
   },
-  formCancelText: { color: '#57534e', fontWeight: '600' },
+  formCancelText: { color: colors.textSecondary, fontWeight: '600' },
   readingCard: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f4',
+    borderBottomColor: colors.surfaceMuted,
     paddingBottom: 16,
     marginBottom: 16,
   },
   readingAuthor: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  readingAuthorName: { fontSize: 14, fontWeight: '700', color: '#1c1917', flex: 1 },
+  readingAuthorName: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1 },
   moreBtn: { paddingHorizontal: 4 },
-  moreBtnText: { fontSize: 18, color: '#a8a29e', fontWeight: '700' },
-  scripture: { fontSize: 14, fontWeight: '600', color: '#44403c', marginBottom: 4 },
-  thoughts: { fontSize: 14, color: '#78716c', lineHeight: 20, marginBottom: 12 },
+  moreBtnText: { fontSize: 18, color: colors.textSubtle, fontWeight: '700' },
+  scripture: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  thoughts: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginBottom: 12 },
   reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reactionBtn: {
     flexDirection: 'row',
@@ -472,9 +473,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 20,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     gap: 4,
   },
-  reactionActive: { backgroundColor: '#e7e5e4' },
+  reactionActive: { backgroundColor: colors.border },
   reactionCount: { fontSize: 12, fontWeight: '700' },
 });

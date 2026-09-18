@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { colors } from '@shared/colors';
 import {
   View,
   Text,
@@ -76,7 +77,7 @@ export default function LoginScreen() {
         await createUserWithEmailAndPassword(auth, email.trim(), password);
       }
     } catch (err: unknown) {
-      setError(getAuthErrorMessage(err));
+      setError(getAuthErrorMessage(err, 'email'));
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ export default function LoginScreen() {
       await sendPasswordResetEmail(auth, trimmed);
       setInfo('Password reset email sent. Check your inbox (and spam).');
     } catch (err: unknown) {
-      setError(getAuthErrorMessage(err));
+      setError(getAuthErrorMessage(err, 'email'));
     } finally {
       setResetting(false);
     }
@@ -114,7 +115,7 @@ export default function LoginScreen() {
       await signInWithGoogle();
     } catch (err: unknown) {
       if (!isAuthCancelled(err)) {
-        setError(getAuthErrorMessage(err));
+        setError(getAuthErrorMessage(err, 'google'));
       }
     } finally {
       setGoogleLoading(false);
@@ -133,7 +134,7 @@ export default function LoginScreen() {
       await signInWithApple();
     } catch (err: unknown) {
       if (!isAuthCancelled(err)) {
-        setError(getAuthErrorMessage(err));
+        setError(getAuthErrorMessage(err, 'apple'));
       }
     } finally {
       setAppleLoading(false);
@@ -190,7 +191,7 @@ export default function LoginScreen() {
                 hitSlop={8}
               >
                 {resetting ? (
-                  <ActivityIndicator size="small" color="#78716c" />
+                  <ActivityIndicator size="small" color={colors.textMuted} />
                 ) : (
                   <Text style={styles.forgotText}>Forgot password?</Text>
                 )}
@@ -239,7 +240,7 @@ export default function LoginScreen() {
               ]}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.onPrimary} />
               ) : (
                 <Text style={styles.primaryBtnText}>
                   {isLogin ? 'Sign In' : 'Create Account'}
@@ -258,7 +259,7 @@ export default function LoginScreen() {
                 {appleAvailable ? (
                   appleLoading ? (
                     <View style={styles.appleLoading}>
-                      <ActivityIndicator color="#1c1917" />
+                      <ActivityIndicator color={colors.text} />
                     </View>
                   ) : (
                     <View
@@ -286,7 +287,7 @@ export default function LoginScreen() {
                     ]}
                   >
                     {googleLoading ? (
-                      <ActivityIndicator color="#1c1917" />
+                      <ActivityIndicator color={colors.text} />
                     ) : (
                       <>
                         <Ionicons name="logo-google" size={18} color="#4285F4" />
@@ -320,30 +321,30 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafaf9' },
+  container: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 28,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
   },
   header: { alignItems: 'center', marginBottom: 24 },
   logo: { width: 88, height: 88, marginBottom: 12, borderRadius: 20 },
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1c1917',
+    color: colors.brand,
     letterSpacing: -1,
   },
   subtitle: {
     fontSize: 14,
-    color: '#78716c',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
@@ -353,22 +354,22 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#78716c',
+    color: colors.textMuted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     fontSize: 15,
     marginBottom: 4,
-    color: '#1c1917',
+    color: colors.text,
   },
   forgotBtn: { alignSelf: 'flex-end', marginTop: -4, marginBottom: 4, minHeight: 20 },
-  forgotText: { fontSize: 13, fontWeight: '500', color: '#78716c' },
+  forgotText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -380,51 +381,51 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#d6d3d1',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
   },
   checkboxChecked: {
-    backgroundColor: '#1c1917',
-    borderColor: '#1c1917',
+    backgroundColor: colors.text,
+    borderColor: colors.text,
   },
-  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  checkmark: { color: colors.onPrimary, fontSize: 14, fontWeight: '700' },
   termsText: {
     flex: 1,
     fontSize: 13,
-    color: '#57534e',
+    color: colors.textSecondary,
     lineHeight: 19,
   },
   termsLink: {
-    color: '#1c1917',
+    color: colors.text,
     fontWeight: '700',
     textDecorationLine: 'underline',
   },
-  error: { color: '#ef4444', fontSize: 13, lineHeight: 18 },
-  info: { color: '#15803d', fontSize: 13, lineHeight: 18 },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
+  info: { color: colors.success, fontSize: 13, lineHeight: 18 },
   primaryBtn: {
     paddingVertical: 14,
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.text,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
     minHeight: 48,
     justifyContent: 'center',
   },
-  primaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  primaryBtnText: { color: colors.onPrimary, fontWeight: '600', fontSize: 15 },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginTop: 8,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#e7e5e4' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#a8a29e',
+    color: colors.textSubtle,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -434,13 +435,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     minHeight: 48,
   },
-  googleBtnText: { color: '#1c1917', fontWeight: '600', fontSize: 15 },
+  googleBtnText: { color: colors.text, fontWeight: '600', fontSize: 15 },
   appleBtn: {
     width: '100%',
     height: 48,
@@ -449,12 +450,12 @@ const styles = StyleSheet.create({
   appleLoading: {
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#f5f5f4',
+    backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
   disabled: { opacity: 0.5 },
   switchBtn: { marginTop: 24, alignItems: 'center' },
-  switchText: { fontSize: 14, color: '#78716c' },
-  switchLink: { fontWeight: '600', color: '#1c1917' },
+  switchText: { fontSize: 14, color: colors.textMuted },
+  switchLink: { fontWeight: '600', color: colors.text },
 });

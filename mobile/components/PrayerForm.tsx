@@ -10,6 +10,7 @@ import {
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Group, UserProfile } from '@shared/types';
+import { colors } from '@shared/colors';
 
 import { assertAllowedContent } from '@/lib/contentFilter';
 
@@ -54,17 +55,17 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
       <View style={styles.typeToggle}>
         <Pressable
           onPress={() => setType('request')}
-          style={[styles.typeBtn, type === 'request' && styles.typeBtnActive]}
+          style={[styles.typeBtn, type === 'request' && styles.typeBtnRequest]}
         >
-          <Text style={[styles.typeBtnText, type === 'request' && styles.typeBtnTextActive]}>
+          <Text style={[styles.typeBtnText, type === 'request' && styles.typeBtnTextOnAccent]}>
             Prayer Request
           </Text>
         </Pressable>
         <Pressable
           onPress={() => setType('praise')}
-          style={[styles.typeBtn, type === 'praise' && styles.typeBtnActive]}
+          style={[styles.typeBtn, type === 'praise' && styles.typeBtnPraise]}
         >
-          <Text style={[styles.typeBtnText, type === 'praise' && styles.typeBtnTextActive]}>
+          <Text style={[styles.typeBtnText, type === 'praise' && styles.typeBtnTextOnMist]}>
             Praise Report
           </Text>
         </Pressable>
@@ -92,7 +93,7 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
           style={[styles.submitBtn, submitting && styles.disabled]}
         >
           {submitting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.text} />
           ) : (
             <Text style={styles.submitText}>Post</Text>
           )}
@@ -107,11 +108,11 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
 
 const styles = StyleSheet.create({
   form: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     marginBottom: 16,
     gap: 16,
   },
@@ -123,27 +124,33 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#f5f5f4',
+    backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
   },
-  typeBtnActive: {
-    backgroundColor: '#1c1917',
+  typeBtnRequest: {
+    backgroundColor: colors.pray,
+  },
+  typeBtnPraise: {
+    backgroundColor: colors.rejoice,
   },
   typeBtnText: {
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#a8a29e',
+    color: colors.textSubtle,
   },
-  typeBtnTextActive: {
-    color: '#fff',
+  typeBtnTextOnAccent: {
+    color: colors.text,
+  },
+  typeBtnTextOnMist: {
+    color: colors.text,
   },
   textarea: {
     padding: 16,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     borderRadius: 12,
     fontSize: 15,
     minHeight: 100,
@@ -156,27 +163,27 @@ const styles = StyleSheet.create({
   submitBtn: {
     flex: 1,
     paddingVertical: 12,
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.pray,
     borderRadius: 12,
     alignItems: 'center',
   },
   submitText: {
-    color: '#fff',
+    color: colors.text,
     fontWeight: '600',
     fontSize: 15,
   },
   cancelBtn: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f5f5f4',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 12,
     justifyContent: 'center',
   },
   cancelText: {
-    color: '#57534e',
+    color: colors.textSecondary,
     fontWeight: '600',
     fontSize: 15,
   },
-  error: { color: '#ef4444', fontSize: 13 },
+  error: { color: colors.danger, fontSize: 13 },
   disabled: { opacity: 0.5 },
 });

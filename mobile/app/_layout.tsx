@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler';
+import { colors } from '@shared/colors';
 import { useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -16,12 +17,13 @@ function RootLayoutNav() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'onboarding';
-
+    const onSettings = segments[0] === '(tabs)' && segments[1] === 'settings';
     const hasGroups = Boolean(profile?.groupIds?.length || profile?.groupId);
 
     if (!user && !inAuthGroup) {
       router.replace('/login');
-    } else if (user && !hasGroups && segments[0] !== 'onboarding') {
+    } else if (user && !hasGroups && segments[0] !== 'onboarding' && !onSettings) {
+      // Allow Settings without a group so users can edit profile / sign out / delete.
       router.replace('/onboarding');
     } else if (user && hasGroups && inAuthGroup) {
       router.replace('/(tabs)/calendar');
@@ -38,7 +40,7 @@ function RootLayoutNav() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#78716c" />
+        <ActivityIndicator size="large" color={colors.textMuted} />
       </View>
     );
   }
@@ -65,6 +67,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
   },
 });
