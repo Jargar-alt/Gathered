@@ -19,8 +19,9 @@ npm run submit:ios
 ```
 
 - Bundle ID: `com.acuratls.gathered`
-- Version: `1.1.0` (build number auto-increments)
+- Version: `1.1.0`; store build number is remote on EAS (`autoIncrement` on production)
 - Enable **Sign In with Apple** on the App ID (builds use `EXPO_NO_CAPABILITY_SYNC=1`)
+- Always build a **new** IPA before submit — App Store rejects reused build numbers
 
 After submit, the build appears in App Store Connect → TestFlight.
 
@@ -36,7 +37,8 @@ npm run submit:android
 ```
 
 - Package: `com.acuratls.gathered`
-- Version: `1.1.0` (`versionCode` auto-increments)
+- Version: `1.1.0`; `versionCode` is remote on EAS (`autoIncrement` on production)
+- Always build a **new** AAB before submit — Play rejects reused version codes
 - Submit profile uploads to the **internal** track as a **draft**
 
 Register Android SHA-1 fingerprints for Google Sign-In (`eas credentials -p android`). See [docs/PLAY_STORE.md](../docs/PLAY_STORE.md) and [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md).

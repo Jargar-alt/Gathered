@@ -27,6 +27,9 @@ module.exports = {
     supportsTablet: true,
     bundleIdentifier: 'com.acuratls.gathered',
     usesAppleSignIn: true,
+    // With eas.json appVersionSource "remote", EAS owns the store build number.
+    // Local value is a fallback only (e.g. local prebuilds).
+    buildNumber: '1',
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
       ITSAppUsesNonExemptEncryption: false,
@@ -40,6 +43,7 @@ module.exports = {
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     package: 'com.acuratls.gathered',
+    // With eas.json appVersionSource "remote", EAS owns versionCode for store builds.
     versionCode: 1,
   },
   web: {

@@ -1,11 +1,14 @@
 # Play Store Checklist — Gathered
 
 **Package name:** `com.acuratls.gathered`  
-**Version:** `1.1.0` (`versionCode` auto-increments via EAS)  
+**Version:** `1.1.0` (user-facing)  
+**versionCode:** managed remotely by EAS (`appVersionSource: remote` + production `autoIncrement`) — required because the project uses `app.config.js`  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 **Terms URL:** https://jargar-alt.github.io/Gathered/terms.html  
 
-> Build from a store-ready branch (email auth, Google Sign-In, account deletion, UGC safety). Do **not** submit old AABs.
+> Build from a store-ready branch (email auth, Google Sign-In, account deletion, UGC safety).  
+> Always run a **new** `npm run build:android` before submit — re-submitting an old AAB fails with “Version code X has already been used.”  
+> If Play is ahead of EAS, bump the remote counter: `eas build:version:set -p android` then rebuild.
 
 ---
 

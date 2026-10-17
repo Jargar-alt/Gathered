@@ -1,11 +1,14 @@
 # App Store Review Checklist — Gathered
 
 **Bundle ID:** `com.acuratls.gathered`  
-**Version:** `1.1.0`  
+**Version:** `1.1.0` (user-facing)  
+**Build number:** managed remotely by EAS (`appVersionSource: remote` + production `autoIncrement`) — required because the project uses `app.config.js`  
 **Team:** JACK RILEY GARBER (`P9V25CHLW2`)  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 
-> Build from a branch that includes: email-only auth, password reset, account deletion, logo, and `EXPO_NO_CAPABILITY_SYNC`. Do **not** submit older production builds.
+> Build from a branch that includes: email-only auth, password reset, account deletion, logo, and `EXPO_NO_CAPABILITY_SYNC`.  
+> Always run a **new** `npm run build:ios` before submit — reusing an old IPA fails if that build number was already uploaded.  
+> If App Store Connect is ahead of EAS, bump the remote counter: `eas build:version:set -p ios` then rebuild.
 
 ---
 
@@ -108,7 +111,7 @@ Rebuild native (`npm run build:ios`) — Apple/Google are not OTA/JS-only change
 
 ```bash
 cd mobile
-npm run build:ios          # production IPA (skips Apple capability sync; auto-increments build)
+npm run build:ios          # production IPA (skips Apple capability sync; remote autoIncrement)
 npm run submit:ios         # upload to App Store Connect
 ```
 
