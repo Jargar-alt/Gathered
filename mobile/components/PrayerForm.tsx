@@ -7,9 +7,9 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Group, UserProfile } from '@shared/types';
+import { Group, PrayerRequest, UserProfile } from '@shared/types';
 import { colors } from '@shared/colors';
 
 import { assertAllowedContent } from '@/lib/contentFilter';
@@ -17,14 +17,16 @@ import { assertAllowedContent } from '@/lib/contentFilter';
 interface PrayerFormProps {
   group: Group;
   profile: UserProfile;
+  prayer?: PrayerRequest;
   onClose: () => void;
 }
 
-export default function PrayerForm({ group, profile, onClose }: PrayerFormProps) {
-  const [content, setContent] = useState('');
-  const [type, setType] = useState<'request' | 'praise'>('request');
+export default function PrayerForm({ group, profile, prayer, onClose }: PrayerFormProps) {
+  const [content, setContent] = useState(prayer?.content ?? '');
+  const [type, setType] = useState<'request' | 'praise'>(prayer?.type ?? 'request');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const isEditing = Boolean(prayer);
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
@@ -32,19 +34,26 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
     setSubmitting(true);
     try {
       assertAllowedContent(content);
-      await addDoc(collection(db, 'prayers'), {
-        uid: profile.uid,
-        groupId: group.id,
-        type,
-        content: content.trim(),
-        reactions: {},
-        notes: [],
-        createdAt: serverTimestamp(),
-      });
+      if (prayer) {
+        await updateDoc(doc(db, 'prayers', prayer.id), {
+          type,
+          content: content.trim(),
+        });
+      } else {
+        await addDoc(collection(db, 'prayers'), {
+          uid: profile.uid,
+          groupId: group.id,
+          type,
+          content: content.trim(),
+          reactions: {},
+          notes: [],
+          createdAt: serverTimestamp(),
+        });
+      }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create prayer');
-      console.error('Failed to create prayer:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save prayer');
+      console.error('Failed to save prayer:', err);
     } finally {
       setSubmitting(false);
     }
@@ -56,6 +65,7 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
         <Pressable
           onPress={() => setType('request')}
           style={[styles.typeBtn, type === 'request' && styles.typeBtnRequest]}
+          disabled={submitting}
         >
           <Text style={[styles.typeBtnText, type === 'request' && styles.typeBtnTextOnAccent]}>
             Prayer Request
@@ -64,6 +74,7 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
         <Pressable
           onPress={() => setType('praise')}
           style={[styles.typeBtn, type === 'praise' && styles.typeBtnPraise]}
+          disabled={submitting}
         >
           <Text style={[styles.typeBtnText, type === 'praise' && styles.typeBtnTextOnMist]}>
             Praise Report
@@ -82,6 +93,7 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
         }
         value={content}
         onChangeText={setContent}
+        editable={!submitting}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -89,16 +101,16 @@ export default function PrayerForm({ group, profile, onClose }: PrayerFormProps)
       <View style={styles.actions}>
         <Pressable
           onPress={handleSubmit}
-          disabled={submitting}
-          style={[styles.submitBtn, submitting && styles.disabled]}
+          disabled={submitting || !content.trim()}
+          style={[styles.submitBtn, (submitting || !content.trim()) && styles.disabled]}
         >
           {submitting ? (
             <ActivityIndicator color={colors.text} />
           ) : (
-            <Text style={styles.submitText}>Post</Text>
+            <Text style={styles.submitText}>{isEditing ? 'Save Changes' : 'Post'}</Text>
           )}
         </Pressable>
-        <Pressable onPress={onClose} style={styles.cancelBtn}>
+        <Pressable onPress={onClose} style={styles.cancelBtn} disabled={submitting}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>

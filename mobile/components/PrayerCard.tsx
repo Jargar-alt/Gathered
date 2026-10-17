@@ -11,7 +11,9 @@ import {
 import { format } from 'date-fns';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
+import PrayerForm from '@/components/PrayerForm';
 import { PrayerNote, PrayerRequest, UserProfile } from '@shared/types';
 import { REACTIONS } from '@shared/constants';
 import { colors } from '@shared/colors';
@@ -48,7 +50,10 @@ function noteKey(note: PrayerNote, index: number) {
 }
 
 export default function PrayerCard({ prayer, member, members, profile, onModerationChange }: PrayerCardProps) {
+  const { group } = useAuth();
   const notes = prayer.notes ?? [];
+  const isOwn = prayer.uid === profile.uid;
+  const [editingPost, setEditingPost] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteError, setNoteError] = useState('');
@@ -173,6 +178,17 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
     ? format(prayer.createdAt.toDate(), 'MMM d, h:mm a')
     : 'Just now';
 
+  if (editingPost && isOwn && group) {
+    return (
+      <PrayerForm
+        group={group}
+        profile={profile}
+        prayer={prayer}
+        onClose={() => setEditingPost(false)}
+      />
+    );
+  }
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -198,7 +214,18 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
             {prayer.type}
           </Text>
         </View>
-        {prayer.uid !== profile.uid ? (
+        {isOwn ? (
+          <Pressable
+            onPress={() => {
+              cancelNoteForm();
+              setEditingPost(true);
+            }}
+            hitSlop={8}
+            style={styles.editBtn}
+          >
+            <Text style={styles.editBtnText}>Edit</Text>
+          </Pressable>
+        ) : (
           <Pressable
             onPress={() =>
               openModerationMenu({
@@ -217,7 +244,7 @@ export default function PrayerCard({ prayer, member, members, profile, onModerat
           >
             <Text style={styles.moreBtnText}>···</Text>
           </Pressable>
-        ) : null}
+        )}
       </View>
 
       <Text style={styles.content}>{prayer.content}</Text>
@@ -386,6 +413,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  editBtn: { paddingHorizontal: 8, paddingVertical: 4, marginLeft: 4 },
+  editBtnText: { fontSize: 13, fontWeight: '600', color: colors.pray },
   moreBtn: { paddingHorizontal: 6, paddingVertical: 2, marginLeft: 4 },
   moreBtnText: { fontSize: 18, color: colors.textSubtle, fontWeight: '700' },
   requestText: { color: colors.pray },

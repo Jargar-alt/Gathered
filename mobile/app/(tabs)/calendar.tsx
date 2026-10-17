@@ -208,6 +208,7 @@ export default function CalendarScreen() {
                 entry={entry}
                 member={members[entry.uid]}
                 profile={profile}
+                group={group}
                 onModerationChange={refreshModeration}
               />
             ))
@@ -222,17 +223,20 @@ function ReadingForm({
   date,
   group,
   profile,
+  entry,
   onClose,
 }: {
   date: Date;
   group: { id: string };
   profile: UserProfile;
+  entry?: ReadingEntry;
   onClose: () => void;
 }) {
-  const [scripture, setScripture] = useState('');
-  const [thoughts, setThoughts] = useState('');
+  const [scripture, setScripture] = useState(entry?.scripture ?? '');
+  const [thoughts, setThoughts] = useState(entry?.thoughts ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const isEditing = Boolean(entry);
 
   const handleSubmit = async () => {
     if (!scripture.trim()) return;
@@ -240,15 +244,22 @@ function ReadingForm({
     setSubmitting(true);
     try {
       assertAllowedContent(scripture, thoughts);
-      await addDoc(collection(db, 'readings'), {
-        uid: profile.uid,
-        groupId: group.id,
-        date: format(date, 'yyyy-MM-dd'),
-        scripture: scripture.trim(),
-        thoughts: thoughts.trim(),
-        reactions: {},
-        createdAt: serverTimestamp(),
-      });
+      if (entry) {
+        await updateDoc(doc(db, 'readings', entry.id), {
+          scripture: scripture.trim(),
+          thoughts: thoughts.trim(),
+        });
+      } else {
+        await addDoc(collection(db, 'readings'), {
+          uid: profile.uid,
+          groupId: group.id,
+          date: format(date, 'yyyy-MM-dd'),
+          scripture: scripture.trim(),
+          thoughts: thoughts.trim(),
+          reactions: {},
+          createdAt: serverTimestamp(),
+        });
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save entry.');
@@ -265,6 +276,7 @@ function ReadingForm({
         placeholder="e.g. John 1:1-14"
         value={scripture}
         onChangeText={setScripture}
+        editable={!submitting}
       />
       <Text style={styles.formLabel}>Thoughts / Summary</Text>
       <TextInput
@@ -273,13 +285,22 @@ function ReadingForm({
         value={thoughts}
         onChangeText={setThoughts}
         multiline
+        editable={!submitting}
       />
       {error ? <Text style={styles.formError}>{error}</Text> : null}
       <View style={styles.formActions}>
-        <Pressable onPress={handleSubmit} disabled={submitting} style={styles.formSubmit}>
-          <Text style={styles.formSubmitText}>Save Entry</Text>
+        <Pressable
+          onPress={handleSubmit}
+          disabled={submitting || !scripture.trim()}
+          style={[styles.formSubmit, (submitting || !scripture.trim()) && styles.formSubmitDisabled]}
+        >
+          {submitting ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Text style={styles.formSubmitText}>{isEditing ? 'Save Changes' : 'Save Entry'}</Text>
+          )}
         </Pressable>
-        <Pressable onPress={onClose} style={styles.formCancel}>
+        <Pressable onPress={onClose} style={styles.formCancel} disabled={submitting}>
           <Text style={styles.formCancelText}>Cancel</Text>
         </Pressable>
       </View>
@@ -291,13 +312,18 @@ function ReadingCard({
   entry,
   member,
   profile,
+  group,
   onModerationChange,
 }: {
   entry: ReadingEntry;
   member?: UserProfile;
   profile: UserProfile;
+  group: { id: string };
   onModerationChange?: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const isOwn = entry.uid === profile.uid;
+
   const handleReaction = async (emoji: string) => {
     const reactions = { ...entry.reactions };
     if (!reactions[emoji]) reactions[emoji] = [];
@@ -309,12 +335,30 @@ function ReadingCard({
     await updateDoc(doc(db, 'readings', entry.id), { reactions });
   };
 
+  if (editing && isOwn) {
+    return (
+      <View style={styles.readingCard}>
+        <ReadingForm
+          date={parseLocalDate(entry.date)}
+          group={group}
+          profile={profile}
+          entry={entry}
+          onClose={() => setEditing(false)}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.readingCard}>
       <View style={styles.readingAuthor}>
         <Avatar profile={member} size="sm" />
         <Text style={styles.readingAuthorName}>{member?.displayName}</Text>
-        {entry.uid !== profile.uid ? (
+        {isOwn ? (
+          <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
+            <Text style={styles.editBtnText}>Edit</Text>
+          </Pressable>
+        ) : (
           <Pressable
             onPress={() =>
               openModerationMenu({
@@ -333,7 +377,7 @@ function ReadingCard({
           >
             <Text style={styles.moreBtnText}>···</Text>
           </Pressable>
-        ) : null}
+        )}
       </View>
       <Text style={styles.scripture}>{entry.scripture}</Text>
       <Text style={styles.thoughts}>{entry.thoughts}</Text>
@@ -446,6 +490,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   formSubmitText: { color: colors.text, fontWeight: '600' },
+  formSubmitDisabled: { opacity: 0.5 },
   formCancel: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -462,6 +507,8 @@ const styles = StyleSheet.create({
   },
   readingAuthor: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   readingAuthorName: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1 },
+  editBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  editBtnText: { fontSize: 13, fontWeight: '600', color: colors.read },
   moreBtn: { paddingHorizontal: 4 },
   moreBtnText: { fontSize: 18, color: colors.textSubtle, fontWeight: '700' },
   scripture: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
