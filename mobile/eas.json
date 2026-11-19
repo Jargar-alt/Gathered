@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -43,7 +43,6 @@
       }
     },
     "production": {
-      "autoIncrement": true,
       "env": {
         "EXPO_NO_CAPABILITY_SYNC": "1",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1074128724577-er7cssinjgafqgrl8am8k82laga9n39p.apps.googleusercontent.com",

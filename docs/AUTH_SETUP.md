@@ -55,25 +55,44 @@ npm run submit:ios
 1. Firebase Console → project `gen-lang-client-0346540522` → **Add app** → **Android**
 2. Package name: **`com.acuratls.gathered`** (must match `mobile/app.config.js`)
 3. You do **not** need to commit `google-services.json` for the current Expo Firebase JS config
-4. After Android credentials exist on EAS, get fingerprints:
+4. Register **every** signing SHA used by the app. Missing fingerprints cause `DEVELOPER_ERROR` / code `10` (Google Sign-In fails; email/password still works).
+
+**Upload keystore** (EAS / `mobile/credentials/android/keystore.jks`):
+
+| | Fingerprint |
+|---|---|
+| SHA-1 | `21:AA:AC:3A:D1:86:AD:B7:99:A8:1D:58:40:44:E2:77:FB:8F:BB:D7` |
+| SHA-256 | `45:69:0B:BF:07:FA:83:77:31:B8:B7:9E:2A:30:00:56:7E:BE:66:A3:DC:80:FB:49:D5:6D:D8:43:1D:44:75:96` |
+
+**Play App Signing** (required for Play Store / internal testing downloads):
+
+1. [Play Console](https://play.google.com/console) → Gathered → **Setup → App signing**
+2. Copy **App signing key certificate** SHA-1 (and SHA-256)
+3. Add those fingerprints too — Play re-signs the AAB, so the upload keystore alone is not enough
+
+Paste all fingerprints into:
+
+- Firebase → Project settings → Android app `com.acuratls.gathered` → **Add fingerprint**
+- And/or [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → **Android** OAuth client with package `com.acuratls.gathered` + each SHA-1 (same Google Cloud project as Firebase)
+
+To re-print upload fingerprints locally:
 
 ```bash
 cd mobile
-eas credentials -p android
+/opt/homebrew/opt/openjdk/bin/keytool -list -v \
+  -keystore credentials/android/keystore.jks \
+  -alias e6d0da70a0d50473a12ad5f5266dc752
 ```
 
-5. Copy **SHA-1** and **SHA-256** into:
-   - Firebase → Project settings → your Android app → **Add fingerprint**
-   - And/or [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → create an **Android** OAuth client with package `com.acuratls.gathered` and that SHA-1 (same Google Cloud project as Firebase)
-6. Rebuild if you already shipped an AAB before fingerprints were registered:
+Or: `eas credentials -p android` / `npx @react-native-google-signin/config-doctor --package-name com.acuratls.gathered`
+
+Fingerprint changes take effect without a rebuild once Google’s servers pick them up (usually a few minutes). Rebuild only if you also changed client IDs or native config:
 
 ```bash
 cd mobile
 npm run build:android
 npm run submit:android
 ```
-
-Without the correct SHA-1, Google Sign-In fails on Android even though email/password still works.
 
 Login requires the Terms of Use checkbox before email, Apple, or Google.
 

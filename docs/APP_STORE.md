@@ -1,14 +1,13 @@
 # App Store Review Checklist — Gathered
 
 **Bundle ID:** `com.acuratls.gathered`  
-**Version:** `1.1.0` (user-facing)  
-**Build number:** managed remotely by EAS (`appVersionSource: remote` + production `autoIncrement`) — required because the project uses `app.config.js`  
+**Version / build:** [`mobile/version.json`](../mobile/version.json) (local; `npm run build:ios` auto-bumps `iosBuildNumber`)  
 **Team:** JACK RILEY GARBER (`P9V25CHLW2`)  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 
-> Build from a branch that includes: email-only auth, password reset, account deletion, logo, and `EXPO_NO_CAPABILITY_SYNC`.  
-> Always run a **new** `npm run build:ios` before submit — reusing an old IPA fails if that build number was already uploaded.  
-> If App Store Connect is ahead of EAS, bump the remote counter: `eas build:version:set -p ios` then rebuild.
+> Build from a store-ready branch. Always use `npm run build:ios` (not a bare `eas build`) so the build number increments.  
+> After Apple approves a version (e.g. `1.1.0`), that train is closed — run `npm run bump:marketing` once, then `npm run build:ios`, and create matching version **1.1.1** in App Store Connect.  
+> Commit the updated `version.json` after each store build so the next bump stays ahead.
 
 ---
 
@@ -111,8 +110,8 @@ Rebuild native (`npm run build:ios`) — Apple/Google are not OTA/JS-only change
 
 ```bash
 cd mobile
-npm run build:ios          # production IPA (skips Apple capability sync; remote autoIncrement)
-npm run submit:ios         # upload to App Store Connect
+npm run build:ios          # bumps iosBuildNumber in version.json, then production IPA
+npm run submit:ios         # upload to App Store Connect (pick the NEW build)
 ```
 
 Or submit a specific build:

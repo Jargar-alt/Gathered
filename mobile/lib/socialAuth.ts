@@ -68,7 +68,8 @@ function configureGoogleSignIn(GoogleSignin: GoogleSignInModule['GoogleSignin'])
 
   GoogleSignin.configure({
     webClientId,
-    iosClientId,
+    // iosClientId is ignored on Android; only pass it on iOS.
+    ...(Platform.OS === 'ios' && iosClientId ? { iosClientId } : {}),
   });
   googleConfigured = true;
 }
@@ -102,20 +103,50 @@ async function getGoogleIdToken(): Promise<string> {
     );
   }
 
-  const { GoogleSignin, isSuccessResponse } = loadGoogleSignin();
+  const { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } =
+    loadGoogleSignin();
   configureGoogleSignIn(GoogleSignin);
   if (Platform.OS === 'android') {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   }
-  const response = await GoogleSignin.signIn();
 
-  if (!isSuccessResponse(response)) {
-    throw new Error('Google Sign-In was cancelled.');
+  let response;
+  try {
+    response = await GoogleSignin.signIn();
+  } catch (err: unknown) {
+    // Preserve native codes (e.g. Android "10" / DEVELOPER_ERROR) for authErrors.
+    if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) {
+      const cancelled = new Error('Google Sign-In was cancelled.') as Error & {
+        code?: string;
+      };
+      cancelled.code = 'SIGN_IN_CANCELLED';
+      throw cancelled;
+    }
+    throw err;
   }
 
-  const idToken = response.data.idToken;
+  if (!isSuccessResponse(response)) {
+    const cancelled = new Error('Google Sign-In was cancelled.') as Error & {
+      code?: string;
+    };
+    cancelled.code = 'SIGN_IN_CANCELLED';
+    throw cancelled;
+  }
+
+  let idToken = response.data.idToken;
+  // Android sometimes returns a success payload without idToken; refresh tokens.
   if (!idToken) {
-    throw new Error('Google Sign-In did not return an ID token.');
+    try {
+      const tokens = await GoogleSignin.getTokens();
+      idToken = tokens.idToken;
+    } catch {
+      // Fall through to the explicit error below.
+    }
+  }
+  if (!idToken) {
+    throw new Error(
+      'Google Sign-In did not return an ID token. Confirm webClientId is the Web OAuth client and Android SHA fingerprints are registered in Firebase.'
+    );
   }
   return idToken;
 }

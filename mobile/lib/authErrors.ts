@@ -53,6 +53,24 @@ export function getAuthErrorMessage(
     return 'Sign-in was cancelled.';
   }
 
+  // Android Google Sign-In ApiException 10 — almost always package name / SHA mismatch.
+  if (
+    code === '10' ||
+    code === 'DEVELOPER_ERROR' ||
+    lower.includes('developer_error') ||
+    lower.includes('developer console is not set up correctly')
+  ) {
+    return (
+      'Google Sign-In is misconfigured for this Android build (SHA fingerprint). ' +
+      'In Firebase → Project settings → Android app com.acuratls.gathered, add the ' +
+      'upload keystore SHA-1 and the Play App Signing SHA-1, then try again.'
+    );
+  }
+
+  if (code === 'PLAY_SERVICES_NOT_AVAILABLE') {
+    return 'Google Play Services is missing or out of date. Update Play Services and try again.';
+  }
+
   if (code === 'auth/requires-recent-login') {
     return 'For security, confirm your account again to delete it.';
   }

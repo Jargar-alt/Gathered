@@ -4,6 +4,7 @@ const IS_DEV_CLIENT =
   process.env.EAS_BUILD_PROFILE === 'development-simulator';
 
 const authConfig = require('./auth.config');
+const appVersion = require('./version.json');
 
 // Bake Google Sign-In into the native binary when enabled.
 const googleSignInPlugin = authConfig.enableGoogleSignIn
@@ -18,7 +19,8 @@ const googleSignInPlugin = authConfig.enableGoogleSignIn
 module.exports = {
   name: 'Gathered',
   slug: 'gathered',
-  version: '1.1.0',
+  // Single source of truth: mobile/version.json (bumped by npm run build:ios / build:android).
+  version: appVersion.version,
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'gathered',
@@ -27,9 +29,7 @@ module.exports = {
     supportsTablet: true,
     bundleIdentifier: 'com.acuratls.gathered',
     usesAppleSignIn: true,
-    // With eas.json appVersionSource "remote", EAS owns the store build number.
-    // Local value is a fallback only (e.g. local prebuilds).
-    buildNumber: '1',
+    buildNumber: String(appVersion.iosBuildNumber),
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
       ITSAppUsesNonExemptEncryption: false,
@@ -43,8 +43,7 @@ module.exports = {
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     package: 'com.acuratls.gathered',
-    // With eas.json appVersionSource "remote", EAS owns versionCode for store builds.
-    versionCode: 1,
+    versionCode: Number(appVersion.androidVersionCode),
   },
   web: {
     bundler: 'metro',

@@ -1,14 +1,13 @@
 # Play Store Checklist — Gathered
 
 **Package name:** `com.acuratls.gathered`  
-**Version:** `1.1.0` (user-facing)  
-**versionCode:** managed remotely by EAS (`appVersionSource: remote` + production `autoIncrement`) — required because the project uses `app.config.js`  
+**Version / versionCode:** [`mobile/version.json`](../mobile/version.json) (local; `npm run build:android` auto-bumps `androidVersionCode`)  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 **Terms URL:** https://jargar-alt.github.io/Gathered/terms.html  
 
-> Build from a store-ready branch (email auth, Google Sign-In, account deletion, UGC safety).  
-> Always run a **new** `npm run build:android` before submit — re-submitting an old AAB fails with “Version code X has already been used.”  
-> If Play is ahead of EAS, bump the remote counter: `eas build:version:set -p android` then rebuild.
+> Build from a store-ready branch. Always use `npm run build:android` so versionCode increments.  
+> Never re-submit an old AAB — Play rejects reused version codes.  
+> Commit the updated `version.json` after each store build.
 
 ---
 
@@ -110,8 +109,8 @@ Optional: 7" tablet if you claim tablet support later.
 
 ```bash
 cd mobile
-npm run build:android          # production AAB (auto-increments versionCode)
-npm run submit:android         # upload to Play internal track as draft
+npm run build:android          # bumps androidVersionCode in version.json, then production AAB
+npm run submit:android         # upload to Play internal track as draft (pick the NEW build)
 ```
 
 Or submit a specific build:
@@ -130,12 +129,12 @@ Promote: Play Console → Testing → Internal testing → promote to Production
 
 ## Google Sign-In on Android
 
-Email/password works without extra keys. Google Sign-In needs the **upload keystore SHA-1** (and usually SHA-256) registered on the Firebase Android app / Google Cloud OAuth Android client.
+Email/password works without extra keys. Google Sign-In needs **both**:
 
-```bash
-cd mobile
-eas credentials -p android
-```
+1. **Upload keystore** SHA-1 / SHA-256 (listed in [AUTH_SETUP.md](./AUTH_SETUP.md))
+2. **Play App Signing** SHA-1 from Play Console → Setup → App signing
+
+Register them on the Firebase Android app (`com.acuratls.gathered`). Without the Play signing SHA, Google Sign-In fails for store/internal-testing installs even when a local/EAS build works.
 
 Full steps: [AUTH_SETUP.md](./AUTH_SETUP.md) § Google Sign-In → Android.
 
