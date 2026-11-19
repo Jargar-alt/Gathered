@@ -37,6 +37,7 @@ import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { parseLocalDate } from '@/lib/dates';
 import { ReadingEntry, UserProfile } from '@shared/types';
 import { REACTIONS, AVATAR_COLOR_MAP } from '@shared/constants';
+import { colors } from '@shared/colors';
 import { assertAllowedContent } from '@/lib/contentFilter';
 import { getReportedContentIds } from '@/lib/moderation';
 import { openModerationMenu } from '@/lib/moderationMenu';
@@ -113,7 +114,7 @@ export default function CalendarScreen() {
   if (!profile || !group) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#78716c" />
+        <ActivityIndicator color={colors.textMuted} />
       </View>
     );
   }
@@ -166,8 +167,8 @@ export default function CalendarScreen() {
                       styles.dot,
                       {
                         backgroundColor: members[e.uid]?.avatarColor
-                          ? AVATAR_COLOR_MAP[members[e.uid].avatarColor] ?? '#d6d3d1'
-                          : '#d6d3d1',
+                          ? AVATAR_COLOR_MAP[members[e.uid].avatarColor] ?? colors.border
+                          : colors.border,
                       },
                     ]}
                   />
@@ -207,6 +208,7 @@ export default function CalendarScreen() {
                 entry={entry}
                 member={members[entry.uid]}
                 profile={profile}
+                group={group}
                 onModerationChange={refreshModeration}
               />
             ))
@@ -221,17 +223,20 @@ function ReadingForm({
   date,
   group,
   profile,
+  entry,
   onClose,
 }: {
   date: Date;
   group: { id: string };
   profile: UserProfile;
+  entry?: ReadingEntry;
   onClose: () => void;
 }) {
-  const [scripture, setScripture] = useState('');
-  const [thoughts, setThoughts] = useState('');
+  const [scripture, setScripture] = useState(entry?.scripture ?? '');
+  const [thoughts, setThoughts] = useState(entry?.thoughts ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const isEditing = Boolean(entry);
 
   const handleSubmit = async () => {
     if (!scripture.trim()) return;
@@ -239,15 +244,22 @@ function ReadingForm({
     setSubmitting(true);
     try {
       assertAllowedContent(scripture, thoughts);
-      await addDoc(collection(db, 'readings'), {
-        uid: profile.uid,
-        groupId: group.id,
-        date: format(date, 'yyyy-MM-dd'),
-        scripture: scripture.trim(),
-        thoughts: thoughts.trim(),
-        reactions: {},
-        createdAt: serverTimestamp(),
-      });
+      if (entry) {
+        await updateDoc(doc(db, 'readings', entry.id), {
+          scripture: scripture.trim(),
+          thoughts: thoughts.trim(),
+        });
+      } else {
+        await addDoc(collection(db, 'readings'), {
+          uid: profile.uid,
+          groupId: group.id,
+          date: format(date, 'yyyy-MM-dd'),
+          scripture: scripture.trim(),
+          thoughts: thoughts.trim(),
+          reactions: {},
+          createdAt: serverTimestamp(),
+        });
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save entry.');
@@ -264,6 +276,7 @@ function ReadingForm({
         placeholder="e.g. John 1:1-14"
         value={scripture}
         onChangeText={setScripture}
+        editable={!submitting}
       />
       <Text style={styles.formLabel}>Thoughts / Summary</Text>
       <TextInput
@@ -272,13 +285,22 @@ function ReadingForm({
         value={thoughts}
         onChangeText={setThoughts}
         multiline
+        editable={!submitting}
       />
       {error ? <Text style={styles.formError}>{error}</Text> : null}
       <View style={styles.formActions}>
-        <Pressable onPress={handleSubmit} disabled={submitting} style={styles.formSubmit}>
-          <Text style={styles.formSubmitText}>Save Entry</Text>
+        <Pressable
+          onPress={handleSubmit}
+          disabled={submitting || !scripture.trim()}
+          style={[styles.formSubmit, (submitting || !scripture.trim()) && styles.formSubmitDisabled]}
+        >
+          {submitting ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Text style={styles.formSubmitText}>{isEditing ? 'Save Changes' : 'Save Entry'}</Text>
+          )}
         </Pressable>
-        <Pressable onPress={onClose} style={styles.formCancel}>
+        <Pressable onPress={onClose} style={styles.formCancel} disabled={submitting}>
           <Text style={styles.formCancelText}>Cancel</Text>
         </Pressable>
       </View>
@@ -290,13 +312,18 @@ function ReadingCard({
   entry,
   member,
   profile,
+  group,
   onModerationChange,
 }: {
   entry: ReadingEntry;
   member?: UserProfile;
   profile: UserProfile;
+  group: { id: string };
   onModerationChange?: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const isOwn = entry.uid === profile.uid;
+
   const handleReaction = async (emoji: string) => {
     const reactions = { ...entry.reactions };
     if (!reactions[emoji]) reactions[emoji] = [];
@@ -308,12 +335,30 @@ function ReadingCard({
     await updateDoc(doc(db, 'readings', entry.id), { reactions });
   };
 
+  if (editing && isOwn) {
+    return (
+      <View style={styles.readingCard}>
+        <ReadingForm
+          date={parseLocalDate(entry.date)}
+          group={group}
+          profile={profile}
+          entry={entry}
+          onClose={() => setEditing(false)}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.readingCard}>
       <View style={styles.readingAuthor}>
         <Avatar profile={member} size="sm" />
         <Text style={styles.readingAuthorName}>{member?.displayName}</Text>
-        {entry.uid !== profile.uid ? (
+        {isOwn ? (
+          <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
+            <Text style={styles.editBtnText}>Edit</Text>
+          </Pressable>
+        ) : (
           <Pressable
             onPress={() =>
               openModerationMenu({
@@ -332,7 +377,7 @@ function ReadingCard({
           >
             <Text style={styles.moreBtnText}>···</Text>
           </Pressable>
-        ) : null}
+        )}
       </View>
       <Text style={styles.scripture}>{entry.scripture}</Text>
       <Text style={styles.thoughts}>{entry.thoughts}</Text>
@@ -357,7 +402,7 @@ function ReadingCard({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafaf9' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, paddingBottom: 120 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   monthHeader: {
@@ -366,17 +411,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  title: { fontSize: 24, fontWeight: '700', color: '#1c1917' },
+  title: { fontSize: 24, fontWeight: '700', color: colors.brand },
   nav: { flexDirection: 'row', gap: 8 },
   navBtn: { padding: 8 },
-  navBtnText: { fontSize: 20, color: '#57534e' },
+  navBtnText: { fontSize: 20, color: colors.textSecondary },
   weekRow: { flexDirection: 'row', marginBottom: 4 },
   weekDay: {
     flex: 1,
     textAlign: 'center',
     fontSize: 10,
     fontWeight: '700',
-    color: '#a8a29e',
+    color: colors.textSubtle,
     textTransform: 'uppercase',
     letterSpacing: 1,
     paddingVertical: 8,
@@ -387,27 +432,27 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#f5f5f4',
+    borderColor: colors.surfaceMuted,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
   dayCellMuted: { opacity: 0.2 },
-  dayCellSelected: { backgroundColor: '#1c1917', borderColor: '#1c1917' },
-  dayCellToday: { borderColor: '#a8a29e' },
-  dayNum: { fontSize: 12, fontWeight: '500', color: '#44403c' },
-  dayNumSelected: { color: '#fff' },
+  dayCellSelected: { backgroundColor: colors.read, borderColor: colors.read },
+  dayCellToday: { borderColor: colors.brand },
+  dayNum: { fontSize: 12, fontWeight: '500', color: colors.text },
+  dayNumSelected: { color: colors.text },
   dots: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 2 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dayPanel: {
     marginTop: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
   },
   dayPanelHeader: {
     flexDirection: 'row',
@@ -415,56 +460,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  dayPanelTitle: { fontSize: 16, fontWeight: '700', color: '#1c1917' },
-  recordBtn: { fontSize: 14, fontWeight: '600', color: '#1c1917' },
-  noEntries: { color: '#a8a29e', fontStyle: 'italic', fontSize: 14 },
+  dayPanelTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  recordBtn: { fontSize: 14, fontWeight: '600', color: colors.text },
+  noEntries: { color: colors.textSubtle, fontStyle: 'italic', fontSize: 14 },
   form: { gap: 12 },
   formLabel: {
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#a8a29e',
+    color: colors.textSubtle,
   },
   formInput: {
     padding: 12,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     borderRadius: 12,
     fontSize: 14,
   },
   formTextarea: { minHeight: 80, textAlignVertical: 'top' },
-  formError: { color: '#ef4444', fontSize: 13 },
+  formError: { color: colors.danger, fontSize: 13 },
   formActions: { flexDirection: 'row', gap: 8 },
   formSubmit: {
     flex: 1,
     paddingVertical: 12,
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.read,
     borderRadius: 12,
     alignItems: 'center',
   },
-  formSubmitText: { color: '#fff', fontWeight: '600' },
+  formSubmitText: { color: colors.text, fontWeight: '600' },
+  formSubmitDisabled: { opacity: 0.5 },
   formCancel: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f5f5f4',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 12,
     justifyContent: 'center',
   },
-  formCancelText: { color: '#57534e', fontWeight: '600' },
+  formCancelText: { color: colors.textSecondary, fontWeight: '600' },
   readingCard: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f4',
+    borderBottomColor: colors.surfaceMuted,
     paddingBottom: 16,
     marginBottom: 16,
   },
   readingAuthor: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  readingAuthorName: { fontSize: 14, fontWeight: '700', color: '#1c1917', flex: 1 },
+  readingAuthorName: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1 },
+  editBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  editBtnText: { fontSize: 13, fontWeight: '600', color: colors.read },
   moreBtn: { paddingHorizontal: 4 },
-  moreBtnText: { fontSize: 18, color: '#a8a29e', fontWeight: '700' },
-  scripture: { fontSize: 14, fontWeight: '600', color: '#44403c', marginBottom: 4 },
-  thoughts: { fontSize: 14, color: '#78716c', lineHeight: 20, marginBottom: 12 },
+  moreBtnText: { fontSize: 18, color: colors.textSubtle, fontWeight: '700' },
+  scripture: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  thoughts: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginBottom: 12 },
   reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reactionBtn: {
     flexDirection: 'row',
@@ -472,9 +520,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 20,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     gap: 4,
   },
-  reactionActive: { backgroundColor: '#e7e5e4' },
+  reactionActive: { backgroundColor: colors.border },
   reactionCount: { fontSize: 12, fontWeight: '700' },
 });

@@ -16,10 +16,12 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import Avatar from '@/components/Avatar';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
-import { deleteAccount } from '@/lib/deleteAccount';
-import { getAuthErrorMessage } from '@/lib/authErrors';
+import { deleteAccount, hasAppleProvider, hasGoogleProvider, hasPasswordProvider } from '@/lib/deleteAccount';
+import { getAuthErrorMessage, isAuthCancelled } from '@/lib/authErrors';
+import { signOutGoogle } from '@/lib/socialAuth';
 import { unblockUser } from '@/lib/moderation';
 import { AVATAR_COLORS, AVATAR_COLOR_MAP } from '@shared/constants';
+import { colors } from '@shared/colors';
 import { UserProfile } from '@shared/types';
 
 type GroupAction = 'idle' | 'join' | 'create';
@@ -78,10 +80,10 @@ export default function SettingsScreen() {
     };
   }, [profile?.blockedUids?.join(',')]);
 
-  if (!profile || !group) {
+  if (!profile) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#78716c" />
+        <ActivityIndicator color={colors.textMuted} />
       </View>
     );
   }
@@ -108,6 +110,7 @@ export default function SettingsScreen() {
   };
 
   const copyInviteCode = async () => {
+    if (!group) return;
     await Clipboard.setStringAsync(group.inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -183,8 +186,12 @@ export default function SettingsScreen() {
     setDeleteError('');
     setDeleting(true);
     try {
-      await deleteAccount(deletePassword);
+      await deleteAccount(hasPasswordProvider() ? deletePassword : undefined);
     } catch (err) {
+      if (isAuthCancelled(err)) {
+        setDeleting(false);
+        return;
+      }
       setDeleteError(getAuthErrorMessage(err));
       setDeleting(false);
     }
@@ -214,7 +221,7 @@ export default function SettingsScreen() {
                   styles.colorSwatch,
                   {
                     backgroundColor: AVATAR_COLOR_MAP[color],
-                    borderColor: selected ? '#1c1917' : '#e7e5e4',
+                    borderColor: selected ? colors.text : colors.border,
                   },
                   selected && styles.colorSwatchSelected,
                 ]}
@@ -234,7 +241,7 @@ export default function SettingsScreen() {
             value={displayName}
             onChangeText={setDisplayName}
             placeholder="How your group sees you"
-            placeholderTextColor="#a8a29e"
+            placeholderTextColor={colors.textSubtle}
           />
         </View>
 
@@ -246,7 +253,7 @@ export default function SettingsScreen() {
             onChangeText={(t) => setInitials(t.toUpperCase())}
             maxLength={2}
             placeholder="JG"
-            placeholderTextColor="#a8a29e"
+            placeholderTextColor={colors.textSubtle}
           />
         </View>
 
@@ -263,10 +270,16 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Your groups</Text>
-        <Text style={styles.sectionHint}>Tap a group to make it active for calendar and prayers</Text>
+        {group ? (
+          <Text style={styles.sectionHint}>Tap a group to make it active for calendar and prayers</Text>
+        ) : (
+          <Text style={styles.sectionHint}>
+            Join or create a group to use calendar and prayers.
+          </Text>
+        )}
 
         {groups.map((g) => {
-          const active = g.id === group.id;
+          const active = Boolean(group && g.id === group.id);
           return (
             <View key={g.id} style={[styles.groupListRow, active && styles.groupListRowActive]}>
               <Pressable
@@ -279,7 +292,7 @@ export default function SettingsScreen() {
                   <Ionicons
                     name={active ? 'people' : 'people-outline'}
                     size={20}
-                    color="#57534e"
+                    color={colors.textSecondary}
                   />
                 </View>
                 <View style={styles.groupInfo}>
@@ -291,7 +304,7 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
                 {active ? (
-                  <Ionicons name="checkmark-circle" size={22} color="#047857" />
+                  <Ionicons name="checkmark-circle" size={22} color={colors.success} />
                 ) : null}
               </Pressable>
               <Pressable
@@ -305,23 +318,25 @@ export default function SettingsScreen() {
           );
         })}
 
-        <View style={styles.inviteCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.inviteLabel}>Active invite code</Text>
-            <Text style={styles.inviteCode}>{group.inviteCode}</Text>
-            <Text style={styles.inviteHint}>Share to invite friends to {group.name}</Text>
+        {group ? (
+          <View style={styles.inviteCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inviteLabel}>Active invite code</Text>
+              <Text style={styles.inviteCode}>{group.inviteCode}</Text>
+              <Text style={styles.inviteHint}>Share to invite friends to {group.name}</Text>
+            </View>
+            <Pressable onPress={copyInviteCode} style={styles.copyBtn}>
+              <Ionicons
+                name={copied ? 'checkmark' : 'copy-outline'}
+                size={18}
+                color={copied ? colors.success : colors.textSecondary}
+              />
+              <Text style={[styles.copyBtnText, copied && styles.copyBtnTextSuccess]}>
+                {copied ? 'Copied' : 'Copy'}
+              </Text>
+            </Pressable>
           </View>
-          <Pressable onPress={copyInviteCode} style={styles.copyBtn}>
-            <Ionicons
-              name={copied ? 'checkmark' : 'copy-outline'}
-              size={18}
-              color={copied ? '#047857' : '#57534e'}
-            />
-            <Text style={[styles.copyBtnText, copied && styles.copyBtnTextSuccess]}>
-              {copied ? 'Copied' : 'Copy'}
-            </Text>
-          </Pressable>
-        </View>
+        ) : null}
 
         {groupAction === 'idle' && (
           <View style={styles.groupActions}>
@@ -332,8 +347,10 @@ export default function SettingsScreen() {
               }}
               style={styles.secondaryBtn}
             >
-              <Ionicons name="enter-outline" size={18} color="#1c1917" />
-              <Text style={styles.secondaryBtnText}>Join another group</Text>
+              <Ionicons name="enter-outline" size={18} color={colors.text} />
+              <Text style={styles.secondaryBtnText}>
+                {group ? 'Join another group' : 'Join a group'}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -342,8 +359,10 @@ export default function SettingsScreen() {
               }}
               style={styles.secondaryBtn}
             >
-              <Ionicons name="add-circle-outline" size={18} color="#1c1917" />
-              <Text style={styles.secondaryBtnText}>Create another group</Text>
+              <Ionicons name="add-circle-outline" size={18} color={colors.text} />
+              <Text style={styles.secondaryBtnText}>
+                {group ? 'Create another group' : 'Create a group'}
+              </Text>
             </Pressable>
           </View>
         )}
@@ -357,7 +376,7 @@ export default function SettingsScreen() {
               onChangeText={setInviteCode}
               autoCapitalize="characters"
               placeholder="AB12CD"
-              placeholderTextColor="#a8a29e"
+              placeholderTextColor={colors.textSubtle}
               editable={!groupBusy}
             />
             {groupError ? <Text style={styles.error}>{groupError}</Text> : null}
@@ -388,7 +407,7 @@ export default function SettingsScreen() {
               value={newGroupName}
               onChangeText={setNewGroupName}
               placeholder="e.g. Wednesday Bible Study"
-              placeholderTextColor="#a8a29e"
+              placeholderTextColor={colors.textSubtle}
               editable={!groupBusy}
             />
             {groupError ? <Text style={styles.error}>{groupError}</Text> : null}
@@ -435,8 +454,15 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      <Pressable onPress={() => signOut(auth)} style={styles.signOutBtn} disabled={deleting}>
-        <Ionicons name="log-out-outline" size={18} color="#dc2626" />
+      <Pressable
+        onPress={async () => {
+          await signOutGoogle();
+          await signOut(auth);
+        }}
+        style={styles.signOutBtn}
+        disabled={deleting}
+      >
+        <Ionicons name="log-out-outline" size={18} color={colors.danger} />
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
 
@@ -448,20 +474,32 @@ export default function SettingsScreen() {
           </Pressable>
         ) : (
           <View style={styles.deleteForm}>
-            <Text style={styles.sectionHint}>
-              Enter your password to permanently delete your Gathered account.
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={deletePassword}
-              onChangeText={setDeletePassword}
-              placeholder="Password"
-              placeholderTextColor="#a8a29e"
-              secureTextEntry
-              autoComplete="password"
-              textContentType="password"
-              editable={!deleting}
-            />
+            {hasPasswordProvider() ? (
+              <>
+                <Text style={styles.sectionHint}>
+                  Enter your password to permanently delete your Gathered account.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  placeholder="Password"
+                  placeholderTextColor={colors.textSubtle}
+                  secureTextEntry
+                  autoComplete="password"
+                  textContentType="password"
+                  editable={!deleting}
+                />
+              </>
+            ) : (
+              <Text style={styles.sectionHint}>
+                {hasAppleProvider()
+                  ? 'Sign in with Apple again to confirm and permanently delete your Gathered account.'
+                  : hasGoogleProvider()
+                    ? 'Sign in with Google again to confirm and permanently delete your Gathered account.'
+                    : 'Confirm to permanently delete your Gathered account.'}
+              </Text>
+            )}
             {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
             <View style={styles.inlineActions}>
               <Pressable
@@ -477,13 +515,24 @@ export default function SettingsScreen() {
               </Pressable>
               <Pressable
                 onPress={confirmDeleteAccount}
-                style={[styles.deleteConfirmBtn, (!deletePassword || deleting) && styles.saveBtnDisabled]}
-                disabled={!deletePassword || deleting}
+                style={[
+                  styles.deleteConfirmBtn,
+                  ((hasPasswordProvider() && !deletePassword) || deleting) && styles.saveBtnDisabled,
+                ]}
+                disabled={(hasPasswordProvider() && !deletePassword) || deleting}
               >
                 {deleting ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.onPrimary} />
                 ) : (
-                  <Text style={styles.saveBtnText}>Delete forever</Text>
+                  <Text style={styles.saveBtnText}>
+                    {hasPasswordProvider()
+                      ? 'Delete forever'
+                      : hasAppleProvider()
+                        ? 'Continue with Apple'
+                        : hasGoogleProvider()
+                          ? 'Continue with Google'
+                          : 'Delete forever'}
+                  </Text>
                 )}
               </Pressable>
             </View>
@@ -495,35 +544,35 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafaf9' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, paddingBottom: 120, gap: 12 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   heroCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     paddingVertical: 28,
     paddingHorizontal: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     alignItems: 'center',
     gap: 6,
   },
   heroName: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1c1917',
+    color: colors.text,
     marginTop: 8,
   },
   heroEmail: {
     fontSize: 14,
-    color: '#78716c',
+    color: colors.textMuted,
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     gap: 14,
   },
   sectionLabel: {
@@ -531,11 +580,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
-    color: '#a8a29e',
+    color: colors.textSubtle,
   },
   sectionHint: {
     fontSize: 14,
-    color: '#78716c',
+    color: colors.textMuted,
     marginTop: -6,
   },
   colorPicker: {
@@ -558,17 +607,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#57534e',
+    color: colors.textSecondary,
   },
   input: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
     borderRadius: 12,
     fontSize: 16,
-    color: '#1c1917',
+    color: colors.text,
   },
   initialsInput: {
     width: 88,
@@ -578,7 +627,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     paddingVertical: 14,
-    backgroundColor: '#1c1917',
+    backgroundColor: colors.text,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 4,
@@ -586,19 +635,19 @@ const styles = StyleSheet.create({
   saveBtnDisabled: {
     opacity: 0.45,
   },
-  saveBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  saveBtnText: { color: colors.onPrimary, fontWeight: '600', fontSize: 15 },
   groupListRow: {
     borderWidth: 1,
-    borderColor: '#f5f5f4',
+    borderColor: colors.surfaceMuted,
     borderRadius: 14,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     paddingVertical: 8,
     paddingHorizontal: 10,
     gap: 4,
   },
   groupListRowActive: {
-    borderColor: '#d6d3d1',
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   groupListMain: {
     flexDirection: 'row',
@@ -610,9 +659,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#f5f5f4',
+    borderColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -623,11 +672,11 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1c1917',
+    color: colors.text,
   },
   groupMeta: {
     fontSize: 13,
-    color: '#78716c',
+    color: colors.textMuted,
   },
   leaveBtn: {
     alignSelf: 'flex-end',
@@ -637,17 +686,17 @@ const styles = StyleSheet.create({
   leaveBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#dc2626',
+    color: colors.danger,
   },
   inviteCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fafaf9',
+    backgroundColor: colors.background,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#f5f5f4',
+    borderColor: colors.surfaceMuted,
     gap: 12,
   },
   inviteLabel: {
@@ -655,7 +704,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#a8a29e',
+    color: colors.textSubtle,
     marginBottom: 4,
   },
   inviteCode: {
@@ -663,11 +712,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'monospace',
     letterSpacing: 3,
-    color: '#1c1917',
+    color: colors.text,
   },
   inviteHint: {
     fontSize: 12,
-    color: '#a8a29e',
+    color: colors.textSubtle,
     marginTop: 4,
   },
   copyBtn: {
@@ -680,10 +729,10 @@ const styles = StyleSheet.create({
   copyBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#57534e',
+    color: colors.textSecondary,
   },
   copyBtnTextSuccess: {
-    color: '#047857',
+    color: colors.success,
   },
   groupActions: { gap: 8 },
   secondaryBtn: {
@@ -694,12 +743,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e7e5e4',
+    borderColor: colors.border,
   },
   secondaryBtnText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1c1917',
+    color: colors.text,
   },
   inlineForm: { gap: 10 },
   inlineActions: {
@@ -718,35 +767,35 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#78716c',
+    color: colors.textMuted,
   },
-  error: { color: '#ef4444', fontSize: 13 },
+  error: { color: colors.danger, fontSize: 13 },
   blockedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
   },
-  blockedName: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1c1917', marginRight: 12 },
-  unblockText: { fontSize: 14, fontWeight: '600', color: '#78716c' },
+  blockedName: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, marginRight: 12 },
+  unblockText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: colors.dangerSoft,
     borderRadius: 14,
   },
-  signOutText: { color: '#dc2626', fontWeight: '600', fontSize: 15 },
+  signOutText: { color: colors.danger, fontWeight: '600', fontSize: 15 },
   dangerSection: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: colors.dangerSoft,
     gap: 12,
   },
   deleteBtn: {
@@ -754,14 +803,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: colors.dangerSoft,
   },
-  deleteBtnText: { color: '#dc2626', fontWeight: '600', fontSize: 15 },
+  deleteBtnText: { color: colors.danger, fontWeight: '600', fontSize: 15 },
   deleteForm: { gap: 10 },
   deleteConfirmBtn: {
     flex: 1,
     paddingVertical: 14,
-    backgroundColor: '#dc2626',
+    backgroundColor: colors.danger,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

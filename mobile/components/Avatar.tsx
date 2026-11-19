@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { UserProfile } from '@shared/types';
 import { AVATAR_COLOR_MAP } from '@shared/constants';
+import { colors } from '@shared/colors';
 
 interface AvatarProps {
   profile?: UserProfile | null;
@@ -14,8 +15,8 @@ export default function Avatar({ profile, size = 'md' }: AvatarProps) {
   const dimension = SIZES[size];
   const fontSize = FONT_SIZES[size];
   const bgColor = profile?.avatarColor
-    ? AVATAR_COLOR_MAP[profile.avatarColor] ?? '#d6d3d1'
-    : '#d6d3d1';
+    ? AVATAR_COLOR_MAP[profile.avatarColor] ?? colors.border
+    : colors.border;
 
   return (
     <View
@@ -38,6 +39,6 @@ const styles = StyleSheet.create({
   },
   initials: {
     fontWeight: '700',
-    color: '#57534e',
+    color: colors.textSecondary,
   },
 });

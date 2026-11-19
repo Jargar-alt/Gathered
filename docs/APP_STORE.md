@@ -1,11 +1,13 @@
 # App Store Review Checklist — Gathered
 
 **Bundle ID:** `com.acuratls.gathered`  
-**Version:** `1.0.0`  
+**Version / build:** [`mobile/version.json`](../mobile/version.json) (local; `npm run build:ios` auto-bumps `iosBuildNumber`)  
 **Team:** JACK RILEY GARBER (`P9V25CHLW2`)  
 **Privacy URL:** https://jargar-alt.github.io/Gathered/privacy.html  
 
-> Build from a branch that includes: email-only auth, password reset, account deletion, logo, and `EXPO_NO_CAPABILITY_SYNC`. Do **not** submit older production builds.
+> Build from a store-ready branch. Always use `npm run build:ios` (not a bare `eas build`) so the build number increments.  
+> After Apple approves a version (e.g. `1.1.0`), that train is closed — run `npm run bump:marketing` once, then `npm run build:ios`, and create matching version **1.1.1** in App Store Connect.  
+> Commit the updated `version.json` after each store build so the next bump stays ahead.
 
 ---
 
@@ -35,7 +37,7 @@ Record scripture references and short reflections. See who in your group showed 
 Post requests or praise reports, react with emoji, and add notes so encouragement stays attached to the prayer.
 
 **Private by design**
-Your group’s readings and prayers are only visible to members. Sign in with email and password. Push notifications are optional.
+Your group’s readings and prayers are only visible to members. Sign in with email and password, Apple, or Google. Push notifications are optional.
 
 Gathered is for the quiet work of showing up—for Scripture, for prayer, and for one another.
 
@@ -76,9 +78,9 @@ Encryption: export compliance already set (`ITSAppUsesNonExemptEncryption: false
 ```
 Gathered is a private small-group Bible reading and prayer app.
 
-This build addresses 4.8 and 1.2:
-- Sign-in is email/password only. There is no Google or other third-party login.
-- Users must accept Terms of Use (EULA) on the login/sign-up screen before Sign In or Create Account. Terms state zero tolerance for objectionable content and abusive users: https://jargar-alt.github.io/Gathered/terms.html
+This build addresses 1.2 (UGC) and 4.8 (Sign in with Apple alongside Google):
+- Sign-in options: email/password, Sign in with Apple, and Google.
+- Users must accept Terms of Use (EULA) on the login/sign-up screen before continuing. Terms state zero tolerance for objectionable content and abusive users: https://jargar-alt.github.io/Gathered/terms.html
 - New posts are filtered for common objectionable language.
 - On any other member’s reading or prayer, tap ··· to Flag content or Block user. Flagged posts are hidden for the reporter. Blocked users’ content is hidden. Unblock is in Settings.
 
@@ -96,11 +98,11 @@ Screen recording of Terms + Flag + Block is attached in App Review Information n
 
 ---
 
-## Auth for v1.0
+## Auth
 
-**Email/password only.** Google Sign-In is disabled (`enableGoogleSignIn: false` in `mobile/auth.config.js`) so guideline **4.8** does not apply.
+Email/password, **Sign in with Apple**, and **Google Sign-In**.
 
-To re-enable Google later: set `EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN=1`, re-add Sign in with Apple, and rebuild.
+Rebuild native (`npm run build:ios`) — Apple/Google are not OTA/JS-only changes. Enable **Sign In with Apple** on App ID `com.acuratls.gathered` (builds use `EXPO_NO_CAPABILITY_SYNC=1`).
 
 ---
 
@@ -108,8 +110,8 @@ To re-enable Google later: set `EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN=1`, re-add Sig
 
 ```bash
 cd mobile
-npm run build:ios          # production IPA (skips Apple capability sync; auto-increments build)
-npm run submit:ios         # upload to App Store Connect
+npm run build:ios          # bumps iosBuildNumber in version.json, then production IPA
+npm run submit:ios         # upload to App Store Connect (pick the NEW build)
 ```
 
 Or submit a specific build:
@@ -124,7 +126,7 @@ eas submit --platform ios --profile production --id <BUILD_ID>
 
 Capture on a physical device or Simulator (6.7" iPhone required at minimum):
 
-1. Login (email/password + Terms of Use checkbox — no Google)
+1. Login (email/password + Apple + Google + Terms of Use checkbox)
 2. Calendar with readings (··· safety menu visible on another member’s post)
 3. Day detail / reading form
 4. Prayers & praise list

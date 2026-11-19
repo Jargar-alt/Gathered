@@ -1,13 +1,11 @@
 import { ReactNode, forwardRef } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   ViewStyle,
   ScrollViewProps,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   children: ReactNode;
@@ -15,37 +13,27 @@ type Props = {
   style?: ViewStyle;
 } & Pick<ScrollViewProps, 'keyboardShouldPersistTaps'>;
 
-/** Approximate tab stack header height (title bar, not including status bar). */
-const HEADER_CONTENT_HEIGHT = 44;
-
 /**
- * Scroll + keyboard avoidance for tab screens.
+ * Scroll container for tab screens.
+ * Uses ScrollView keyboard insets on iOS (not KeyboardAvoidingView) so note/text
+ * fields keep focus while typing.
  */
 export const KeyboardScreen = forwardRef<ScrollView, Props>(function KeyboardScreen(
   { children, contentContainerStyle, style, keyboardShouldPersistTaps = 'handled' },
   ref
 ) {
-  const insets = useSafeAreaInsets();
-  const keyboardVerticalOffset =
-    Platform.OS === 'ios' ? insets.top + HEADER_CONTENT_HEIGHT : 0;
-
   return (
-    <KeyboardAvoidingView
+    <ScrollView
+      ref={ref}
       style={[styles.flex, style]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={keyboardVerticalOffset}
+      contentContainerStyle={contentContainerStyle}
+      keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+      keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      contentInsetAdjustmentBehavior="automatic"
     >
-      <ScrollView
-        ref={ref}
-        style={styles.flex}
-        contentContainerStyle={contentContainerStyle}
-        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-        keyboardDismissMode="interactive"
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-      >
-        {children}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {children}
+    </ScrollView>
   );
 });
 

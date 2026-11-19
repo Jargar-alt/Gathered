@@ -1,89 +1,61 @@
 # Gathered Mobile (Expo)
 
-Native iOS app for Gathered — Bible reading accountability and prayer requests. Shares the same Firebase backend as the web app.
+Native iOS and Android app for Gathered — Bible reading accountability and prayer requests. Shares the same Firebase backend as the web app.
 
 ## Prerequisites
 
 - Node.js 20+
-- Apple Developer account ($99/yr) for device testing and App Store
+- Apple Developer account ($99/yr) for iOS
+- Google Play Developer account ($25 one-time) for Android
 - EAS CLI (`npm install -g eas-cli`)
-- Mac and iPhone on the same Wi-Fi network
 
-> **Note:** This project uses **Expo SDK 57**, which is newer than App Store Expo Go supports. Use a **development build** on your iPhone (instructions below), not Expo Go.
-
-## Quick Start (Development Build on iPhone)
-
-### One-time: build and install the dev client
+## TestFlight / App Store
 
 ```bash
 cd mobile
 npm install
-npm run build:dev
+npm run build:ios
+npm run submit:ios
 ```
 
-When the build finishes, EAS gives you a link/QR code — open it on your iPhone to install **Gathered (Dev)**.
+- Bundle ID: `com.acuratls.gathered`
+- Versions live in [`version.json`](./version.json); `npm run build:ios` bumps `iosBuildNumber` every time
+- Enable **Sign In with Apple** on the App ID (builds use `EXPO_NO_CAPABILITY_SYNC=1`)
+- After a version is approved on the App Store, run `npm run bump:marketing` before the next iOS build
+- Commit `version.json` after store builds
 
-EAS may ask you to register your device UDID the first time. Follow the prompts.
+After submit, the build appears in App Store Connect → TestFlight.
 
-### Daily dev workflow
+See [docs/APP_STORE.md](../docs/APP_STORE.md).
+
+## Google Play
+
+```bash
+cd mobile
+npm install
+npm run build:android
+npm run submit:android
+```
+
+- Package: `com.acuratls.gathered`
+- `npm run build:android` bumps `androidVersionCode` in `version.json`
+- Submit profile uploads to the **internal** track as a **draft**
+- Commit `version.json` after store builds
+
+Register Android SHA-1 fingerprints for Google Sign-In (`eas credentials -p android`). See [docs/PLAY_STORE.md](../docs/PLAY_STORE.md) and [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md).
+
+## Local Metro (optional)
+
+Only useful if you already have a matching native binary installed:
 
 ```bash
 cd mobile
 npm start
 ```
 
-1. Open the **Gathered** dev client app on your iPhone (not Expo Go)
-2. Scan the QR code from the terminal, or enter the URL manually
-3. Your JS changes hot-reload as usual
+## Bundle identifier / package
 
-If the phone can't reach your Mac, use tunnel mode:
-
-```bash
-npx expo start --dev-client --tunnel
-```
-
-### iOS Simulator (optional)
-
-```bash
-npm run build:dev:simulator   # one-time EAS build for simulator
-npm run ios                   # opens simulator + connects dev client
-```
-
-## App Store Build (EAS)
-
-### One-time setup
-
-1. Log in to Expo: `eas login`
-2. Configure Apple credentials: `eas credentials`
-   - Distribution certificate
-   - Provisioning profile
-   - **APNs key** (required for push notifications)
-
-### Build for App Store
-
-```bash
-cd mobile
-npm run build:ios
-```
-
-Submit when ready:
-
-```bash
-npm run submit:ios
-```
-
-### Build profiles (`eas.json`)
-
-| Profile | Use |
-|---------|-----|
-| `development` | Dev client for physical iPhone |
-| `development-simulator` | Dev client for iOS Simulator |
-| `preview` | Internal TestFlight / ad-hoc testing |
-| `production` | App Store release (auto-increments build number) |
-
-### Bundle identifier
-
-`com.acuratls.gathered` — change in `app.config.js` if needed.
+`com.acuratls.gathered` — change in `app.config.js` if needed (iOS + Android must stay in sync with store listings and OAuth clients).
 
 ## Features
 
@@ -105,6 +77,6 @@ Push tokens are saved to `users/{uid}.expoPushToken` in Firestore.
 
 ## Auth
 
-Email/password is supported on iOS (v1 App Store). Use the same account as the web app — your group data syncs automatically.
+Email/password, Sign in with Apple (iOS), and Google Sign-In. Same Firebase accounts as the web app — group data syncs automatically.
 
 See [docs/AUTH_SETUP.md](../docs/AUTH_SETUP.md) for Firebase and OAuth configuration.

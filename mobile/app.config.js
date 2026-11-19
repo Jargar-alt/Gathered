@@ -4,8 +4,9 @@ const IS_DEV_CLIENT =
   process.env.EAS_BUILD_PROFILE === 'development-simulator';
 
 const authConfig = require('./auth.config');
+const appVersion = require('./version.json');
 
-// Only bake Google Sign-In into the native binary when enabled (v1 is email-only).
+// Bake Google Sign-In into the native binary when enabled.
 const googleSignInPlugin = authConfig.enableGoogleSignIn
   ? [
       [
@@ -18,7 +19,8 @@ const googleSignInPlugin = authConfig.enableGoogleSignIn
 module.exports = {
   name: 'Gathered',
   slug: 'gathered',
-  version: '1.0.0',
+  // Single source of truth: mobile/version.json (bumped by npm run build:ios / build:android).
+  version: appVersion.version,
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'gathered',
@@ -26,6 +28,8 @@ module.exports = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.acuratls.gathered',
+    usesAppleSignIn: true,
+    buildNumber: String(appVersion.iosBuildNumber),
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
       ITSAppUsesNonExemptEncryption: false,
@@ -33,13 +37,13 @@ module.exports = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: '#fafaf9',
+      backgroundColor: '#EBE3D9',
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     package: 'com.acuratls.gathered',
-    versionCode: 1,
+    versionCode: Number(appVersion.androidVersionCode),
   },
   web: {
     bundler: 'metro',
@@ -61,19 +65,20 @@ module.exports = {
       },
     ],
     ...googleSignInPlugin,
+    'expo-apple-authentication',
     [
       'expo-splash-screen',
       {
         image: './assets/images/splash-icon.png',
         resizeMode: 'contain',
-        backgroundColor: '#fafaf9',
+        backgroundColor: '#EBE3D9',
       },
     ],
     [
       'expo-notifications',
       {
         icon: './assets/images/icon.png',
-        color: '#1c1917',
+        color: '#3D5462',
       },
     ],
   ],
